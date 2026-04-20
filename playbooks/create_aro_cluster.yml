@@ -98,7 +98,7 @@
   tasks:
 
     #  1. Retrieve managed identity resource IDs 
-    - name: "MI Get cluster managed identity - {{ mi_names.cluster }}"
+    - name: "MI Get cluster managed identity - mi_names.cluster"
       azure.azcollection.azure_rm_resource_info:
         resource_group:       "{{ resource_group }}"
         provider:             ManagedIdentity
