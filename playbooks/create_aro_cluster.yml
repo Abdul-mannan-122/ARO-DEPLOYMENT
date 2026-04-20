@@ -99,7 +99,7 @@
         that:
           - pull_secret_content | from_json is defined
           - (pull_secret_content | from_json).auths is defined
-        fail_msg: "Pull secret at {{ pull_secret_path }} is not valid JSON or missing 'auths' key."
+        fail_msg: "Pull secret at {{ pull_secret_content }} is not valid JSON or missing 'auths' key."
     
 
   tasks:
