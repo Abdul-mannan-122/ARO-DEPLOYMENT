@@ -103,6 +103,11 @@
     
 
   tasks:
+    - name: Install ARO SDK
+      pip:
+        name:
+          - azure-mgmt-redhatopenshift
+          - azure-identity
     - name: Check azure.azcollection version
       ansible.builtin.command: ansible-galaxy collection list azure.azcollection
       register: az_version
