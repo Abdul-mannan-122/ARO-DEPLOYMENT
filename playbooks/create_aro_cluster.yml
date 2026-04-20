@@ -103,6 +103,12 @@
     
 
   tasks:
+    - name: Check azure.azcollection version
+      ansible.builtin.command: ansible-galaxy collection list azure.azcollection
+      register: az_version
+
+    - debug:
+        var: az_version.stdout
 
     #  1. Retrieve managed identity resource IDs 
     - name: "MI Get cluster managed identity - {{ mi_names.cluster }}"
