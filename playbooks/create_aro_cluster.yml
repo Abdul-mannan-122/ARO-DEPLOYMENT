@@ -44,7 +44,8 @@
     worker_count:       "{{ worker_count       | default(3)  | int }}"
     pod_cidr:           "{{ pod_cidr           | default('172.22.0.0/16') }}"
     service_cidr:       "{{ service_cidr       | default('172.23.0.0/16') }}"
-    pull_secret_path:   "{{ pull_secret_path   | default('/tmp/pull-secret.json') }}"
+    # pull_secret_path:   "{{ pull_secret_path   | default('/tmp/pull-secret.json') }}"
+    pull_secret_content: "{{ pull_secret_content }}"
     kubeconfig_dest:    "{{ kubeconfig_dest    | default('/tmp') }}"
     fips_validated:     "{{ fips_validated     | default(false) | bool }}"
 
@@ -79,14 +80,19 @@
           Missing or invalid required variable. Ensure cluster_name,
           resource_group, vnet_name are set and mi_prefix is 'wdr' or 'hdr'.
 
-    - name: "[PREFLIGHT] Read pull secret from file"
-      ansible.builtin.slurp:
-        src: "{{ pull_secret_path }}"
-      register: pull_secret_b64
+    # - name: "[PREFLIGHT] Read pull secret from file"
+    #   ansible.builtin.slurp:
+    #     src: "{{ pull_secret_path }}"
+    #   register: pull_secret_b64
+
+    - name: Set pull secret content
+      ansible.builtin.set_fact:
+        pull_secret_content: "{{ pull_secret_content }}"
 
     - name: "[PREFLIGHT] Decode pull secret"
       ansible.builtin.set_fact:
-        pull_secret_content: "{{ pull_secret_b64.content | b64decode }}"
+        # pull_secret_content: "{{ pull_secret_b64.content | b64decode }}"
+        pull_secret_content: "{{ pull_secret_content }}"
 
     - name: "[PREFLIGHT] Validate pull secret JSON"
       ansible.builtin.assert:
@@ -94,8 +100,7 @@
           - pull_secret_content | from_json is defined
           - (pull_secret_content | from_json).auths is defined
         fail_msg: "Pull secret at {{ pull_secret_path }} is not valid JSON or missing 'auths' key."
-    - name: Install Azure collection
-      ansible.builtin.command: ansible-galaxy collection install azure.azcollection
+    
 
   tasks:
 
