@@ -37,8 +37,8 @@
     #  Optional survey inputs (defaults shown) 
     location:           "{{ location           | default('uaenorth') }}"
     ocp_version:        "{{ ocp_version        | default('4.18.31') }}"
-    cp_subnet_name:     "{{ cp_subnet_name     | default('cp-subnet') }}"
-    worker_subnet_name: "{{ worker_subnet_name | default('worker-subnet') }}"
+    cp_subnet_name:     "{{ cp_subnet_name_input     | default('cp-subnet') }}"
+    worker_subnet_name: "{{ worker_subnet_name_input | default('worker-subnet') }}"
     cp_vm_size:         "{{ cp_vm_size         | default('Standard_D8ds_v5') }}"
     worker_vm_size:     "{{ worker_vm_size     | default('Standard_D16s_v5') }}"
     worker_count:       "{{ worker_count       | default(3)  | int }}"
