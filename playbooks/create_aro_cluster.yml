@@ -376,8 +376,8 @@
 
           identity:
             type: UserAssigned
-            userAssignedIdentities:
-              "{{ mi_platform_id }}": {}
+            userAssignedIdentities: "{{ { (mi_platform_id): {} } }}"
+              
 
           properties:
             clusterProfile:
