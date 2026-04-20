@@ -47,7 +47,7 @@
     # pull_secret_path:   "{{ pull_secret_path   | default('/tmp/pull-secret.json') }}"
     pull_secret_content: "{{ pull_secret_content }}"
     kubeconfig_dest:    "{{ kubeconfig_dest_input    | default('/tmp') }}"
-    fips_validated:     "{{ fips_validated_input    | default('Disabled') | bool }}"
+    fips_validated:     "{{ fips_validated_input    | default(false, true) | bool }}"
 
     #  Derived / computed 
     cluster_domain:     "{{ cluster_name }}.ocp.ishj.ae"
