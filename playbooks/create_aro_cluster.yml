@@ -110,6 +110,14 @@
     - debug:
         var: az_version.stdout
 
+    - name: Check Azure SDK version
+      ansible.builtin.command: python3 -c "import azure.mgmt.redhatopenshift as m; print(m.__version__)"
+      register: sdk_version
+      ignore_errors: true
+
+    - debug:
+        var: sdk_version.stdout
+
     #  1. Retrieve managed identity resource IDs 
     - name: "MI Get cluster managed identity - {{ mi_names.cluster }}"
       azure.azcollection.azure_rm_resource_info:
