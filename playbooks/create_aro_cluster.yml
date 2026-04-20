@@ -380,7 +380,6 @@
               "{{ mi_platform_id }}": {}
 
           properties:
-      
             clusterProfile:
               domain: "{{ cluster_domain }}"
               version: "{{ ocp_version }}"
@@ -393,7 +392,7 @@
               podCidr: "{{ pod_cidr }}"
               serviceCidr: "{{ service_cidr }}"
               outboundType: UserDefinedRouting
-          preconfigured_nsg:      Enabled     
+              preconfigured_nsg: Enabled     
 
             masterProfile:
               vmSize: "{{ cp_vm_size }}"
@@ -405,7 +404,7 @@
                 subnetId: "{{ worker_subnet_id }}"
                 count: "{{ worker_count }}"
                 diskSizeGB: 128   # ✅ FIXED (was disk_size_gb)
-          encryption_at_host:   Disabled
+                encryption_at_host:   Disabled
 
             apiserverProfile:
               visibility: Private
@@ -433,7 +432,7 @@
                   resourceId: "{{ mi_svc_op_id }}"
                 - operatorName: NodeBootstrapOperator
                   resourceId: "{{ mi_cluster_id }}"
-        state:                    present
+        state: present
       register: aro_cluster
       when:     not (cluster_exists | bool)
 
