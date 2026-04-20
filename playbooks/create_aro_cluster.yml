@@ -35,18 +35,18 @@
     vnet_name:          "{{ vnet_name }}"             # workload-dr-vnet | hub-dr-vnet
 
     #  Optional survey inputs (defaults shown) 
-    location:           "{{ location           | default('uaenorth') }}"
-    ocp_version:        "{{ ocp_version        | default('4.18.31') }}"
+    location:           "{{ location_input           | default('uaenorth') }}"
+    ocp_version:        "{{ ocp_version_input        | default('4.18.31') }}"
     cp_subnet_name:     "{{ cp_subnet_name_input     | default('cp-subnet') }}"
     worker_subnet_name: "{{ worker_subnet_name_input | default('worker-subnet') }}"
-    cp_vm_size:         "{{ cp_vm_size         | default('Standard_D8ds_v5') }}"
-    worker_vm_size:     "{{ worker_vm_size     | default('Standard_D16s_v5') }}"
-    worker_count:       "{{ worker_count       | default(3)  | int }}"
-    pod_cidr:           "{{ pod_cidr           | default('172.22.0.0/16') }}"
-    service_cidr:       "{{ service_cidr       | default('172.23.0.0/16') }}"
+    cp_vm_size:         "{{ cp_vm_size_input         | default('Standard_D8ds_v5') }}"
+    worker_vm_size:     "{{ worker_vm_size_input    | default('Standard_D16s_v5') }}"
+    worker_count:       "{{ worker_count_input       | default(3)  | int }}"
+    pod_cidr:           "{{ pod_cidr_input           | default('172.22.0.0/16') }}"
+    service_cidr:       "{{ service_cidr_input       | default('172.23.0.0/16') }}"
     # pull_secret_path:   "{{ pull_secret_path   | default('/tmp/pull-secret.json') }}"
     pull_secret_content: "{{ pull_secret_content }}"
-    kubeconfig_dest:    "{{ kubeconfig_dest    | default('/tmp') }}"
+    kubeconfig_dest:    "{{ kubeconfig_dest_input    | default('/tmp') }}"
     fips_validated:     "{{ fips_validated_input    | default(false) | bool }}"
 
     #  Derived / computed 
