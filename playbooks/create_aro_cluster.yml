@@ -282,87 +282,161 @@
       when: cluster_exists | bool
 
     #  4. Create ARO cluster (native azcollection module) 
-    - name: "[CLUSTER] Create ARO cluster - {{ cluster_name }} (takes 35–50 min)"
-      azure.azcollection.azure_rm_openshiftmanagedcluster:
-        resource_group:           "{{ resource_group }}"
-        name:                     "{{ cluster_name }}"
-        location:                 "{{ location }}"
+    # - name: "[CLUSTER] Create ARO cluster - {{ cluster_name }} (takes 35–50 min)"
+    #   azure.azcollection.azure_rm_openshiftmanagedcluster:
+    #     resource_group:           "{{ resource_group }}"
+    #     name:                     "{{ cluster_name }}"
+    #     location:                 "{{ location }}"
 
-        #  Cluster identity (UserAssigned managed identity) 
-        identity:
-          type:                   UserAssigned
-          user_assigned_identities:
-            - id:                 "{{ mi_platform_id }}"
+    #     #  Cluster identity (UserAssigned managed identity) 
+    #     identity:
+    #       type:                   UserAssigned
+    #       user_assigned_identities:
+    #         - id:                 "{{ mi_platform_id }}"
 
-        #  OpenShift cluster profile 
-        cluster_profile:
-          pull_secret:            "{{ pull_secret_content }}"
-          domain:                 "{{ cluster_domain }}"
-          version:                "{{ ocp_version }}"
-          fips_validated_modules: "{{ fips_validated }}"
+    #     #  OpenShift cluster profile 
+    #     cluster_profile:
+    #       pull_secret:            "{{ pull_secret_content }}"
+    #       domain:                 "{{ cluster_domain }}"
+    #       version:                "{{ ocp_version }}"
+    #       fips_validated_modules: "{{ fips_validated }}"
 
-        #  Service principal profile (replaced by managed identity) 
-        # For MI-based clusters this references the cluster MI clientId
-        service_principal_profile:
-          client_id:              "{{ mi_cluster_client_id }}"
-          client_secret:          ""      # Empty - MI-based, no secret needed
+    #     #  Service principal profile (replaced by managed identity) 
+    #     # For MI-based clusters this references the cluster MI clientId
+    #     service_principal_profile:
+    #       client_id:              "{{ mi_cluster_client_id }}"
+    #       client_secret:          ""      # Empty - MI-based, no secret needed
 
-        #  Network profile 
-        network_profile:
-          pod_cidr:               "{{ pod_cidr }}"
-          service_cidr:           "{{ service_cidr }}"
-          outbound_type:          UserDefinedRouting   # Fortinet firewall next-hop
-          preconfigured_nsg:      Enabled              # SDD manages NSG rules
+    #     #  Network profile 
+    #     network_profile:
+    #       pod_cidr:               "{{ pod_cidr }}"
+    #       service_cidr:           "{{ service_cidr }}"
+    #       outbound_type:          UserDefinedRouting   # Fortinet firewall next-hop
+    #       preconfigured_nsg:      Enabled              # SDD manages NSG rules
 
-        #  API server profile (Private cluster) 
-        apiserver_profile:
-          visibility:             Private
+    #     #  API server profile (Private cluster) 
+    #     apiserver_profile:
+    #       visibility:             Private
 
-        #  Ingress profiles (Private cluster) 
-        ingress_profiles:
-          - name:                 default
-            visibility:           Private
+    #     #  Ingress profiles (Private cluster) 
+    #     ingress_profiles:
+    #       - name:                 default
+    #         visibility:           Private
 
-        #  Control plane (master) profile 
-        master_profile:
-          vm_size:                "{{ cp_vm_size }}"
-          subnet_id:              "{{ cp_subnet_id }}"
-          encryption_at_host:     Disabled
+    #     #  Control plane (master) profile 
+    #     master_profile:
+    #       vm_size:                "{{ cp_vm_size }}"
+    #       subnet_id:              "{{ cp_subnet_id }}"
+    #       encryption_at_host:     Disabled
 
-        #  Worker profiles 
-        worker_profiles:
-          - name:                 worker
-            vm_size:              "{{ worker_vm_size }}"
-            subnet_id:            "{{ worker_subnet_id }}"
-            count:                "{{ worker_count | int }}"
-            disk_size_gb:         128
-            encryption_at_host:   Disabled
+    #     #  Worker profiles 
+    #     worker_profiles:
+    #       - name:                 worker
+    #         vm_size:              "{{ worker_vm_size }}"
+    #         subnet_id:            "{{ worker_subnet_id }}"
+    #         count:                "{{ worker_count | int }}"
+    #         disk_size_gb:         128
+    #         encryption_at_host:   Disabled
 
-        #  Platform workload identity profile (9 operator identities) 
-        # Required when deploying with managed identities (not service principal)
-        platform_workload_identity_profile:
-          platform_workload_identities:
-            - operator_name:      CloudControllerManager
-              resource_id:        "{{ mi_ccm_id }}"
-            - operator_name:      ClusterIngressOperator
-              resource_id:        "{{ mi_ingress_id }}"
-            - operator_name:      MachineApiOperator
-              resource_id:        "{{ mi_machine_api_id }}"
-            - operator_name:      DiskCSIDriver
-              resource_id:        "{{ mi_disk_csi_id }}"
-            - operator_name:      FileCSIDriver
-              resource_id:        "{{ mi_file_csi_id }}"
-            - operator_name:      ImageRegistryOperator
-              resource_id:        "{{ mi_registry_id }}"
-            - operator_name:      AROOperator
-              resource_id:        "{{ mi_svc_op_id }}"
-            - operator_name:      NodeBootstrapOperator
-              resource_id:        "{{ mi_cluster_id }}"
+    #     #  Platform workload identity profile (9 operator identities) 
+    #     # Required when deploying with managed identities (not service principal)
+    #     platform_workload_identity_profile:
+    #       platform_workload_identities:
+    #         - operator_name:      CloudControllerManager
+    #           resource_id:        "{{ mi_ccm_id }}"
+    #         - operator_name:      ClusterIngressOperator
+    #           resource_id:        "{{ mi_ingress_id }}"
+    #         - operator_name:      MachineApiOperator
+    #           resource_id:        "{{ mi_machine_api_id }}"
+    #         - operator_name:      DiskCSIDriver
+    #           resource_id:        "{{ mi_disk_csi_id }}"
+    #         - operator_name:      FileCSIDriver
+    #           resource_id:        "{{ mi_file_csi_id }}"
+    #         - operator_name:      ImageRegistryOperator
+    #           resource_id:        "{{ mi_registry_id }}"
+    #         - operator_name:      AROOperator
+    #           resource_id:        "{{ mi_svc_op_id }}"
+    #         - operator_name:      NodeBootstrapOperator
+    #           resource_id:        "{{ mi_cluster_id }}"
 
+    #     state:                    present
+
+    #   register: aro_cluster_result
+    #   when:     not (cluster_exists | bool)
+
+    - name: Create ARO cluster via ARM (FIXED)
+      azure.azcollection.azure_rm_resource:
+        resource_group: "{{ resource_group }}"
+        provider: RedHatOpenShift
+        resource_type: openShiftClusters
+        resource_name: "{{ cluster_name }}"
+        api_version: "2023-11-22"
+        body:
+          location: "{{ location }}"
+
+          identity:
+            type: UserAssigned
+            userAssignedIdentities:
+              "{{ mi_platform_id }}": {}
+
+          properties:
+      
+            clusterProfile:
+              domain: ""{{ cluster_domain }}""
+              version: "{{ ocp_version }}"
+              pullSecret: "{{ pull_secret_content }}"
+
+            servicePrincipalProfile:
+              clientId: "{{ mi_cluster_client_id }}"
+
+            networkProfile:
+              podCidr: "{{ pod_cidr }}"
+              serviceCidr: "{{ service_cidr }}"
+              outboundType: UserDefinedRouting
+          preconfigured_nsg:      Enabled     
+
+            masterProfile:
+              vmSize: "{{ cp_vm_size }}"
+              subnetId: "{{ cp_subnet_id }}"
+
+            workerProfiles:
+              - name: worker
+                vmSize: "{{ worker_vm_size }}"
+                subnetId: "{{ worker_subnet_id }}"
+                count: "{{ worker_count }}"
+                diskSizeGB: 128   # ✅ FIXED (was disk_size_gb)
+          encryption_at_host:   Disabled
+
+            apiserverProfile:
+              visibility: Private
+
+            ingressProfiles:
+              - name: default
+                visibility: Private
+
+            # ✅ CRITICAL FIX: platform workload identities (ARM format)
+            platformWorkloadIdentityProfile:
+              platformWorkloadIdentities:
+                - operatorName: CloudControllerManager
+                  resourceId: "{{ mi_ccm_id }}"
+                - operatorName: ClusterIngressOperator
+                  resourceId: "{{ mi_ingress_id }}"
+                - operatorName: MachineApiOperator
+                  resourceId: "{{ mi_machine_api_id }}"
+                - operatorName: DiskCSIDriver
+                  resourceId: "{{ mi_disk_csi_id }}"
+                - operatorName: FileCSIDriver
+                  resourceId: "{{ mi_file_csi_id }}"
+                - operatorName: ImageRegistryOperator
+                  resourceId: "{{ mi_registry_id }}"
+                - operatorName: AROOperator
+                  resourceId: "{{ mi_svc_op_id }}"
+                - operatorName: NodeBootstrapOperator
+                  resourceId: "{{ mi_cluster_id }}"
         state:                    present
-
-      register: aro_cluster_result
+      register: aro_cluster
       when:     not (cluster_exists | bool)
+
 
     #  5. Wait for cluster to reach Succeeded state 
     - name: "[CLUSTER] Poll for provisioning completion (max 70 min)"
