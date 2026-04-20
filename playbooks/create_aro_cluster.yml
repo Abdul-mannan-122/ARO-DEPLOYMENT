@@ -382,7 +382,7 @@
           properties:
       
             clusterProfile:
-              domain: ""{{ cluster_domain }}""
+              domain: "{{ cluster_domain }}"
               version: "{{ ocp_version }}"
               pullSecret: "{{ pull_secret_content }}"
 
