@@ -443,21 +443,21 @@
             # ✅ CRITICAL FIX: platform workload identities (ARM format)
             platformWorkloadIdentityProfile:
               platformWorkloadIdentities:
-                - operatorName: CloudControllerManager
+                CloudControllerManager:
                   resourceId: "{{ mi_ccm_id }}"
-                - operatorName: ClusterIngressOperator
+                ClusterIngressOperator:
                   resourceId: "{{ mi_ingress_id }}"
-                - operatorName: MachineApiOperator
+                MachineApiOperator:
                   resourceId: "{{ mi_machine_api_id }}"
-                - operatorName: DiskCSIDriver
+                DiskCSIDriver:
                   resourceId: "{{ mi_disk_csi_id }}"
-                - operatorName: FileCSIDriver
+                FileCSIDriver:
                   resourceId: "{{ mi_file_csi_id }}"
-                - operatorName: ImageRegistryOperator
+                ImageRegistryOperator:
                   resourceId: "{{ mi_registry_id }}"
-                - operatorName: AROOperator
+                AROOperator:
                   resourceId: "{{ mi_svc_op_id }}"
-                - operatorName: NodeBootstrapOperator
+                NodeBootstrapOperator:
                   resourceId: "{{ mi_cluster_id }}"
         state: present
       register: aro_cluster
