@@ -228,7 +228,7 @@
         mi_registry_id:       "{{ mi_registry_info.response[0].id }}"
         mi_ingress_id:        "{{ mi_ingress_info.response[0].id }}"
         mi_machine_api_id:    "{{ mi_machine_api_info.response[0].id }}"
-        mi_network_id:        "{{ mi_networ_id_info.response[0].id }}"
+        mi_network_id:        "{{ mi_network_id_info.response[0].id }}"
         mi_svc_op_id:         "{{ mi_svc_op_info.response[0].id }}"
 
 
