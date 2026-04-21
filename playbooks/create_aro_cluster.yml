@@ -383,6 +383,10 @@
         msg:
           - "pull_secret_final TYPE  : {{ pull_secret_final | type_debug }}"
           - "pull_secret_final SAMPLE: {{ (pull_secret_final | string)[:120] }}"
+    
+    - name: Extract subscription ID
+      set_fact:
+        subscription_id: "{{ mi_cluster_id.split('/')[2] }}"
 
     - name: Create ARO cluster via ARM (FIXED)
       azure.azcollection.azure_rm_resource:
