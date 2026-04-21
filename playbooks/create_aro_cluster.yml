@@ -92,18 +92,37 @@
       ansible.builtin.set_fact:
         pull_secret_content: "{{ pull_secret_content }}"
 
-    - name: "[PREFLIGHT] Decode pull secret"
+    # - name: "[PREFLIGHT] Decode pull secret"
+    #   ansible.builtin.set_fact:
+    #     # pull_secret_content: "{{ pull_secret_b64.content | b64decode }}"
+    #     pull_secret_content: "{{ pull_secret_content }}"
+
+    # - name: "[PREFLIGHT] Validate pull secret JSON"
+    #   ansible.builtin.assert:
+    #     that:
+    #       - pull_secret_content | from_json is defined
+    #       - (pull_secret_content | from_json).auths is defined
+    #     fail_msg: "Pull secret at {{ pull_secret_content }} is not valid JSON or missing 'auths' key."
+    - name: "[PREFLIGHT] Ensure pull secret is provided"
+      ansible.builtin.assert:
+        that:
+          - pull_secret_content is defined
+          - pull_secret_content | length > 0
+        fail_msg: "pull_secret_content must be provided via survey"
+
+    - name: "[PREFLIGHT] Normalize pull secret"
       ansible.builtin.set_fact:
-        # pull_secret_content: "{{ pull_secret_b64.content | b64decode }}"
-        pull_secret_content: "{{ pull_secret_content }}"
+        pull_secret_final: >-
+          {{ pull_secret_content
+            if pull_secret_content is string
+            else (pull_secret_content | to_json) }}
 
     - name: "[PREFLIGHT] Validate pull secret JSON"
       ansible.builtin.assert:
         that:
-          - pull_secret_content | from_json is defined
-          - (pull_secret_content | from_json).auths is defined
-        fail_msg: "Pull secret at {{ pull_secret_content }} is not valid JSON or missing 'auths' key."
-    
+          - pull_secret_final | from_json is defined
+          - (pull_secret_final | from_json).auths is defined
+        fail_msg: "Pull secret is invalid"
 
   tasks:
     - name: Install ARO SDK
@@ -421,7 +440,7 @@
             clusterProfile:
               domain: "{{ cluster_domain }}"
               version: "{{ ocp_version | string }}"
-              pullSecret:  "{{  pull_secret_content | string }}"
+              pullSecret:  "{{ pull_secret_final }}"
               resourceGroupId: "/subscriptions/{{ subscription_id }}/resourceGroups/{{ aro_infra_rg }}"
               fipsValidatedModules: "{{ fips_validated }}"
 
