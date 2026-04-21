@@ -130,7 +130,7 @@
         --enable-preconfigured-nsg 
         --client-id {{ cluster_mi.clientId }} 
         --mi-user-assigned {{ platform_mi_resource_id }} 
-        --pull-secret @{{ pull_secret_path }} 
+        --pull-secret {{ pull_secret_content }} 
       async: 3600 
       poll: 0 
       register: create_job 
