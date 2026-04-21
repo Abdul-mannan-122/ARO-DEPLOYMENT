@@ -403,6 +403,7 @@
               domain: "{{ cluster_domain }}"
               version: "{{ ocp_version | string }}"
               pullSecret:  "{{  pull_secret_content | string }}"
+              resourceGroupId: "/subscriptions/{{ lookup('env','AZURE_SUBSCRIPTION_ID') }}/resourceGroups/{{ resource_group }}"
 
             servicePrincipalProfile:
               clientId: "{{ mi_cluster_client_id }}"
