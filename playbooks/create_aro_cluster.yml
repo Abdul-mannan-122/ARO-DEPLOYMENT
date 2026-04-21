@@ -21,34 +21,34 @@
     cluster_name:      "{{ cluster_name }}"
     resource_group:    "{{ resource_group }}"
     vnet_name:         "{{ vnet_name }}"
-    pull_secret_path:  "{{ pull_secret_path | default('/tmp/pull-secret.json') }}"
+    pull_secret:  "{{ pull_secret }}"
 
-    # ── Defaults (override via survey) ────────────────────────────────────
-    location:          "{{ location          | default('uaenorth') }}"
-    cp_subnet:         "{{ cp_subnet         | default('snet-prod-aro-cp-uaen-001') }}"
-    worker_subnet:     "{{ worker_subnet     | default('snet-prod-aro-worker-uaen-001') }}"
-    ocp_version:       "{{ ocp_version       | default('4.18.31') }}"
-    cp_vm_size:        "{{ cp_vm_size        | default('Standard_D8ds_v5') }}"
-    worker_vm_size:    "{{ worker_vm_size    | default('Standard_D16s_v5') }}"
-    worker_count:      "{{ worker_count      | default(3) | int }}"
+    # ── Defaults (override via survey) ─────────────────────────────────────
+    location:          '{{ location         | default("uaenorth") }}'
+    cp_subnet:         '{{ cp_subnet        | default("snet-prod-aro-cp-uaen-001") }}'
+    worker_subnet:     '{{ worker_subnet    | default("snet-prod-aro-worker-uaen-001") }}'
+    ocp_version:       '{{ ocp_version      | default("4.18.31") }}'
+    cp_vm_size:        '{{ cp_vm_size       | default("Standard_D8ds_v5") }}'
+    worker_vm_size:    '{{ worker_vm_size   | default("Standard_D16s_v5") }}'
+    worker_count:      "{{ worker_count     | default(3) | int }}"
     domain_prefix:     "{{ cluster_name }}"
-    pod_cidr:          "{{ pod_cidr          | default('172.22.0.0/16') }}"
-    service_cidr:      "{{ service_cidr      | default('172.23.0.0/16') }}"
-    kubeconfig_dest:   "{{ kubeconfig_dest   | default('/tmp/') }}"
-    mi_prefix:         "{{ mi_prefix }}"      # wdr or hdr — must match resource_group
+    pod_cidr:          '{{ pod_cidr         | default("172.22.0.0/16") }}'
+    service_cidr:      '{{ service_cidr     | default("172.23.0.0/16") }}'
+    kubeconfig_dest:   '{{ kubeconfig_dest  | default("/tmp/") }}'
+    mi_prefix:         "{{ mi_prefix }}"    # wdr or hdr — must match resource_group
 
   tasks:
 
-    # ── Validate inputs ──────────────────────────────────────────────────
-    - name: Validate required variables
+    # ── Validate pull secret ────────────────────────────────────────────────
+    # pull_secret is passed as raw JSON text from AAP survey (Password type).
+    # NOT read from a file — the survey value IS the content.
+    - name: Confirm pull secret survey input is valid JSON
       assert:
         that:
-          - cluster_name     | length > 0
-          - resource_group   | length > 0
-          - vnet_name        | length > 0
-          - pull_secret_path | length > 0
-          - mi_prefix in ["wdr", "hdr"]
-        fail_msg: "Missing or invalid required variable. Check survey inputs."
+          - pull_secret | from_json is mapping
+        fail_msg: >-
+          pull_secret survey variable is not valid JSON.
+          Paste the raw compact JSON from cloud.redhat.com with no extra whitespace.
 
     # ── Get managed identity details ─────────────────────────────────────
     # FIX A: azure_rm_resource_info replaces 'command: az identity show'
@@ -58,7 +58,7 @@
         provider: ManagedIdentity
         resource_type: userAssignedIdentities
         resource_name: "{{ mi_prefix }}-aro-cluster"
-        api_version: "2023-01-31"
+        api_version: "2025-07-25"
       register: cluster_mi_info
 
     - name: "Get platform managed identity ({{ mi_prefix }}-aro-platform)"
@@ -67,7 +67,7 @@
         provider: ManagedIdentity
         resource_type: userAssignedIdentities
         resource_name: "{{ mi_prefix }}-aro-platform"
-        api_version: "2023-01-31"
+        api_version: "2025-07-25"
       register: platform_mi_info
 
     - name: Set identity facts
@@ -105,7 +105,7 @@
         provider:       RedHatOpenShift
         resource_type:  openShiftClusters
         resource_name:  "{{ cluster_name }}"
-        api_version:    "2023-11-22"
+        api_version:    "2025-07-25"
         method:         PUT
         body:
           location: "{{ location }}"
@@ -117,7 +117,7 @@
             clusterProfile:
               domain:          "{{ domain_prefix }}.ocp.ishj.ae"
               version:         "{{ ocp_version }}"
-              pullSecret:      "{{ lookup('file', pull_secret_path) }}"
+              pullSecret:      "{{ pull_secret }}"
               resourceGroupId: "/subscriptions/{{ lookup('env','AZURE_SUBSCRIPTION_ID') }}/resourceGroups/{{ resource_group }}"
             clusterIdentity:
               resourceID: "{{ cluster_mi_resource_id }}"
