@@ -424,7 +424,7 @@
             masterProfile:
               vmSize: "{{ cp_vm_size }}"
               subnetId: "{{ cp_subnet_id }}"
-              encryption_at_host:   Disabled
+              encryption_at_host: false
 
             workerProfiles:
               - name: worker
@@ -432,7 +432,7 @@
                 subnetId: "{{ worker_subnet_id }}"
                 count: "{{ worker_count }}"
                 diskSizeGB: 128   # ✅ FIXED (was disk_size_gb)
-                encryption_at_host:   Disabled
+                encryption_at_host: false
 
             apiserverProfile:
               visibility: Private
