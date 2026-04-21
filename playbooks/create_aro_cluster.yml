@@ -381,7 +381,7 @@
       debug:
         msg:
           - "pull_secret_final TYPE  : {{ pull_secret_final | type_debug }}"
-          - "pull_secret_final SAMPLE: {{ pull_secret_final[:120] }}"
+          - "pull_secret_final SAMPLE: {{ (pull_secret_final | string)[:120] }}"
 
     - name: Create ARO cluster via ARM (FIXED)
       azure.azcollection.azure_rm_resource:
@@ -402,7 +402,7 @@
             clusterProfile:
               domain: "{{ cluster_domain }}"
               version: "{{ ocp_version | string }}"
-              pullSecret:  "{{ pull_secret_final }}"
+              pullSecret:  "{{  pull_secret_content | string }}"
 
             servicePrincipalProfile:
               clientId: "{{ mi_cluster_client_id }}"
