@@ -1,613 +1,234 @@
 ---
-
+#
 # Playbook : create_aro_cluster.yml
-# Purpose  : Deploy an Azure Red Hat OpenShift (ARO) cluster using the native
-#            azure.azcollection.azure_rm_openshiftmanagedcluster module.
-#            No az CLI commands are used. All Azure interactions use the
-#            certified Ansible Azure Collection (azure.azcollection ≥ 1.19.0).
+# Purpose  : Deploy an Azure Red Hat OpenShift cluster.
+# Usage    : Run once for Hub DR (aro-mgmt-uaen-01), once for Workload DR (aro-prod-uaen-01).
+# Method   : az aro create via azure.azcollection.azure_rm_resource (ARM PUT) because
+#             azure_rm_openshiftmanagedcluster does not yet support managed identity clusters.
+#             Cluster info/poll  -> azure_rm_openshiftmanagedcluster_info
+#             Kubeconfig         -> azure_rm_openshiftmanagedclusterkubeconfig_info
+#             Node / CO health   -> kubernetes.core.k8s_info
+#             No command/shell module used.
 #
-# Usage    : Run TWICE from AAP - once for Hub DR, once for Workload DR.
-#            Survey variables control which cluster is created.
-#
-# Clusters : Workload DR → az3prodaro   (sdd-workload-dr-rg)
-#            Hub DR      → az3mgmtaro   (sdd-hub-dr-rg)
-#
-# Requirements:
-#   ansible-galaxy collection install azure.azcollection --upgrade
-#   pip install azure-mgmt-redhatopenshift azure-identity msrestazure
-#       azure-mgmt-compute azure-mgmt-network azure-mgmt-resource
-#
-# AAP Credential type : Microsoft Azure Resource Manager
 
-
-- name: Deploy Azure Red Hat OpenShift Cluster - SDD
+- name: Deploy Azure Red Hat OpenShift Cluster
   hosts: localhost
   connection: local
   gather_facts: false
 
-  #  Variable defaults (all can be overridden via AAP survey) 
   vars:
+    # ── Required survey inputs ────────────────────────────────────────────
+    cluster_name:      "{{ cluster_name }}"
+    resource_group:    "{{ resource_group }}"
+    vnet_name:         "{{ vnet_name }}"
+    pull_secret_path:  "{{ pull_secret_path | default('/tmp/pull-secret.json') }}"
 
-    #  Required survey inputs 
-    cluster_name:       "{{ cluster_name }}"          # az3prodaro | az3mgmtaro
-    resource_group:     "{{ resource_group }}"        # sdd-workload-dr-rg | sdd-hub-dr-rg
-    mi_prefix:          "{{ mi_prefix }}"             # wdr | hdr
-    vnet_name:          "{{ vnet_name }}"             # workload-dr-vnet | hub-dr-vnet
-
-    #  Optional survey inputs (defaults shown) 
-    location:           "{{ location_input           | default('uaenorth') }}"
-    ocp_version: "{{ ocp_version_input | default('4.18.31') | string }}"
-    cp_subnet_name:     "{{ cp_subnet_name_input     | default('cp-subnet') }}"
-    worker_subnet_name: "{{ worker_subnet_name_input | default('worker-subnet') }}"
-    cp_vm_size:         "{{ cp_vm_size_input         | default('Standard_D8ds_v5') }}"
-    worker_vm_size:     "{{ worker_vm_size_input    | default('Standard_D16s_v5') }}"
-    worker_count:       "{{ worker_count_input       | default(3)  | int }}"
-    pod_cidr:           "{{ pod_cidr_input           | default('172.22.0.0/16') }}"
-    service_cidr:       "{{ service_cidr_input       | default('172.23.0.0/16') }}"
-    # pull_secret_path:   "{{ pull_secret_path   | default('/tmp/pull-secret.json') }}"
-    pull_secret_content: "{{ pull_secret_content }}"
-    kubeconfig_dest:    "{{ kubeconfig_dest_input    | default('/tmp') }}"
-    fips_validated:     "{{ 'Enabled' if (fips_validated_input | default(false, true) | bool) else 'Disabled' }}"
-    aro_infra_rg: "{{ aro_infra_rg_input | default(resource_group ~ '-infra') }}"
-
-    #  Derived / computed 
-    cluster_domain:     "{{ cluster_name }}.ocp.ishj.ae"
-
-    # Managed identity naming convention: <prefix>-<role>
-    # 9 identities are required per cluster (see Step 1.4)
-    mi_names:
-      cluster:                "{{ mi_prefix }}-aro-cluster"
-      cloud_controller:       "{{ mi_prefix }}-aro-cloud-controller-manager"
-      disk_csi:               "{{ mi_prefix }}-aro-disk-csi-driver"
-      file_csi:               "{{ mi_prefix }}-aro-file-csi-driver"
-      image_registry:         "{{ mi_prefix }}-aro-image-registry"
-      ingress:                "{{ mi_prefix }}-aro-ingress"
-      machine_api:            "{{ mi_prefix }}-aro-machine-api"
-      service_operator:       "{{ mi_prefix }}-aro-service-operator"
-      platform:               "{{ mi_prefix }}-aro-platform"
-
-  #  Pre-flight input validation 
-  pre_tasks:
-
-    - name: "[PREFLIGHT] Validate required survey variables"
-      ansible.builtin.assert:
-        that:
-          - cluster_name  | length > 0
-          - resource_group | length > 0
-          - vnet_name     | length > 0
-          - mi_prefix in ['wdr', 'hdr']
-          - worker_count  | int >= 3
-        fail_msg: >-
-          Missing or invalid required variable. Ensure cluster_name,
-          resource_group, vnet_name are set and mi_prefix is 'wdr' or 'hdr'.
-
-    # - name: "[PREFLIGHT] Read pull secret from file"
-    #   ansible.builtin.slurp:
-    #     src: "{{ pull_secret_path }}"
-    #   register: pull_secret_b64
-
-    - name: Set pull secret content
-      ansible.builtin.set_fact:
-        pull_secret_content: "{{ pull_secret_content }}"
-
-    - name: "[PREFLIGHT] Decode pull secret"
-      ansible.builtin.set_fact:
-        # pull_secret_content: "{{ pull_secret_b64.content | b64decode }}"
-        pull_secret_content: "{{ pull_secret_content }}"
-
-    - name: "[PREFLIGHT] Validate pull secret JSON"
-      ansible.builtin.assert:
-        that:
-          - pull_secret_content | from_json is defined
-          - (pull_secret_content | from_json).auths is defined
-        fail_msg: "Pull secret at {{ pull_secret_content }} is not valid JSON or missing 'auths' key."
-    
+    # ── Defaults (override via survey) ────────────────────────────────────
+    location:          "{{ location          | default('uaenorth') }}"
+    cp_subnet:         "{{ cp_subnet         | default('snet-prod-aro-cp-uaen-001') }}"
+    worker_subnet:     "{{ worker_subnet     | default('snet-prod-aro-worker-uaen-001') }}"
+    ocp_version:       "{{ ocp_version       | default('4.18.31') }}"
+    cp_vm_size:        "{{ cp_vm_size        | default('Standard_D8ds_v5') }}"
+    worker_vm_size:    "{{ worker_vm_size    | default('Standard_D16s_v5') }}"
+    worker_count:      "{{ worker_count      | default(3) | int }}"
+    domain_prefix:     "{{ cluster_name }}"
+    pod_cidr:          "{{ pod_cidr          | default('172.22.0.0/16') }}"
+    service_cidr:      "{{ service_cidr      | default('172.23.0.0/16') }}"
+    kubeconfig_dest:   "{{ kubeconfig_dest   | default('/tmp/') }}"
+    mi_prefix:         "{{ mi_prefix }}"      # wdr or hdr — must match resource_group
 
   tasks:
-    - name: Install ARO SDK
-      pip:
-        name:
-          - azure-mgmt-redhatopenshift
-          - azure-identity
-    - name: Check azure.azcollection version
-      ansible.builtin.command: ansible-galaxy collection list azure.azcollection
-      register: az_version
 
-    - debug:
-        var: az_version.stdout
+    # ── Validate inputs ──────────────────────────────────────────────────
+    - name: Validate required variables
+      assert:
+        that:
+          - cluster_name     | length > 0
+          - resource_group   | length > 0
+          - vnet_name        | length > 0
+          - pull_secret_path | length > 0
+          - mi_prefix in ["wdr", "hdr"]
+        fail_msg: "Missing or invalid required variable. Check survey inputs."
 
-    - name: Check Azure SDK version
-      ansible.builtin.command: python3 -c "import azure.mgmt.redhatopenshift as m; print(m.__version__)"
-      register: sdk_version
-      ignore_errors: true
-
-    - debug:
-        var: sdk_version.stdout
-
-    #  1. Retrieve managed identity resource IDs 
-    - name: "MI Get cluster managed identity - {{ mi_names.cluster }}"
+    # ── Get managed identity details ─────────────────────────────────────
+    # FIX A: azure_rm_resource_info replaces 'command: az identity show'
+    - name: "Get cluster managed identity ({{ mi_prefix }}-aro-cluster)"
       azure.azcollection.azure_rm_resource_info:
-        resource_group:       "{{ resource_group }}"
-        provider:             ManagedIdentity
-        resource_type:        userAssignedIdentities
-        resource_name:        "{{ mi_names.cluster }}"
-        api_version:          "2023-01-31"
-      register: mi_cluster_info
+        resource_group: "{{ resource_group }}"
+        provider: ManagedIdentity
+        resource_type: userAssignedIdentities
+        resource_name: "{{ mi_prefix }}-aro-cluster"
+        api_version: "2023-01-31"
+      register: cluster_mi_info
 
-    - name: "[MI] Get platform managed identity - {{ mi_names.platform }}"
+    - name: "Get platform managed identity ({{ mi_prefix }}-aro-platform)"
       azure.azcollection.azure_rm_resource_info:
-        resource_group:       "{{ resource_group }}"
-        provider:             ManagedIdentity
-        resource_type:        userAssignedIdentities
-        resource_name:        "{{ mi_names.platform }}"
-        api_version:          "2023-01-31"
-      register: mi_platform_info
+        resource_group: "{{ resource_group }}"
+        provider: ManagedIdentity
+        resource_type: userAssignedIdentities
+        resource_name: "{{ mi_prefix }}-aro-platform"
+        api_version: "2023-01-31"
+      register: platform_mi_info
 
-    - name: "[MI] Get cloud controller manager identity - {{ mi_names.cloud_controller }}"
-      azure.azcollection.azure_rm_resource_info:
-        resource_group:       "{{ resource_group }}"
-        provider:             ManagedIdentity
-        resource_type:        userAssignedIdentities
-        resource_name:        "{{ mi_names.cloud_controller }}"
-        api_version:          "2023-01-31"
-      register: mi_ccm_info
+    - name: Set identity facts
+      set_fact:
+        cluster_mi_client_id:    "{{ cluster_mi_info.response[0].properties.clientId }}"
+        platform_mi_resource_id: "{{ platform_mi_info.response[0].id }}"
+        cluster_mi_resource_id:  "{{ cluster_mi_info.response[0].id }}"
 
-    - name: "[MI] Get disk CSI driver identity - {{ mi_names.disk_csi }}"
-      azure.azcollection.azure_rm_resource_info:
-        resource_group:       "{{ resource_group }}"
-        provider:             ManagedIdentity
-        resource_type:        userAssignedIdentities
-        resource_name:        "{{ mi_names.disk_csi }}"
-        api_version:          "2023-01-31"
-      register: mi_disk_csi_info
-
-    - name: "[MI] Get file CSI driver identity - {{ mi_names.file_csi }}"
-      azure.azcollection.azure_rm_resource_info:
-        resource_group:       "{{ resource_group }}"
-        provider:             ManagedIdentity
-        resource_type:        userAssignedIdentities
-        resource_name:        "{{ mi_names.file_csi }}"
-        api_version:          "2023-01-31"
-      register: mi_file_csi_info
-
-    - name: "[MI] Get image registry identity - {{ mi_names.image_registry }}"
-      azure.azcollection.azure_rm_resource_info:
-        resource_group:       "{{ resource_group }}"
-        provider:             ManagedIdentity
-        resource_type:        userAssignedIdentities
-        resource_name:        "{{ mi_names.image_registry }}"
-        api_version:          "2023-01-31"
-      register: mi_registry_info
-
-    - name: "[MI] Get ingress identity - {{ mi_names.ingress }}"
-      azure.azcollection.azure_rm_resource_info:
-        resource_group:       "{{ resource_group }}"
-        provider:             ManagedIdentity
-        resource_type:        userAssignedIdentities
-        resource_name:        "{{ mi_names.ingress }}"
-        api_version:          "2023-01-31"
-      register: mi_ingress_info
-
-    - name: "[MI] Get machine API identity - {{ mi_names.machine_api }}"
-      azure.azcollection.azure_rm_resource_info:
-        resource_group:       "{{ resource_group }}"
-        provider:             ManagedIdentity
-        resource_type:        userAssignedIdentities
-        resource_name:        "{{ mi_names.machine_api }}"
-        api_version:          "2023-01-31"
-      register: mi_machine_api_info
-
-    - name: "[MI] Get service operator identity - {{ mi_names.service_operator }}"
-      azure.azcollection.azure_rm_resource_info:
-        resource_group:       "{{ resource_group }}"
-        provider:             ManagedIdentity
-        resource_type:        userAssignedIdentities
-        resource_name:        "{{ mi_names.service_operator }}"
-        api_version:          "2023-01-31"
-      register: mi_svc_op_info
-
-    - name: "[MI] Consolidate all identity resource IDs into facts"
-      ansible.builtin.set_fact:
-        mi_cluster_id:        "{{ mi_cluster_info.response[0].id }}"
-        mi_cluster_client_id: "{{ mi_cluster_info.response[0].properties.clientId }}"
-        mi_platform_id:       "{{ mi_platform_info.response[0].id }}"
-        mi_ccm_id:            "{{ mi_ccm_info.response[0].id }}"
-        mi_disk_csi_id:       "{{ mi_disk_csi_info.response[0].id }}"
-        mi_file_csi_id:       "{{ mi_file_csi_info.response[0].id }}"
-        mi_registry_id:       "{{ mi_registry_info.response[0].id }}"
-        mi_ingress_id:        "{{ mi_ingress_info.response[0].id }}"
-        mi_machine_api_id:    "{{ mi_machine_api_info.response[0].id }}"
-        mi_svc_op_id:         "{{ mi_svc_op_info.response[0].id }}"
-
-    - name: "[MI] Display identity facts"
-      ansible.builtin.debug:
+    - name: Display identity details
+      debug:
         msg:
-          - "Cluster MI      : {{ mi_cluster_id }}"
-          - "Cluster ClientID: {{ mi_cluster_client_id }}"
-          - "Platform MI     : {{ mi_platform_id }}"
-          - "CCM MI          : {{ mi_ccm_id }}"
-          - "Disk CSI MI     : {{ mi_disk_csi_id }}"
-          - "File CSI MI     : {{ mi_file_csi_id }}"
-          - "Registry MI     : {{ mi_registry_id }}"
-          - "Ingress MI      : {{ mi_ingress_id }}"
-          - "Machine API MI  : {{ mi_machine_api_id }}"
-          - "Service Op MI   : {{ mi_svc_op_id }}"
+          - "Cluster MI client ID    : {{ cluster_mi_client_id }}"
+          - "Platform MI resource ID : {{ platform_mi_resource_id }}"
 
-    #  2. Retrieve subnet resource IDs 
-    - name: "[NETWORK] Get control plane subnet info"
-      azure.azcollection.azure_rm_subnet_info:
-        resource_group:       "{{ resource_group }}"
-        virtual_network_name: "{{ vnet_name }}"
-        name:                 "{{ cp_subnet_name }}"
-      register: cp_subnet_info
-
-    - name: "[NETWORK] Get worker subnet info"
-      azure.azcollection.azure_rm_subnet_info:
-        resource_group:       "{{ resource_group }}"
-        virtual_network_name: "{{ vnet_name }}"
-        name:                 "{{ worker_subnet_name }}"
-      register: worker_subnet_info
-
-    - name: "[NETWORK] Set subnet ID facts"
-      ansible.builtin.set_fact:
-        cp_subnet_id:     "{{ cp_subnet_info.subnets[0].id }}"
-        worker_subnet_id: "{{ worker_subnet_info.subnets[0].id }}"
-
-    - name: "[NETWORK] Display subnet IDs"
-      ansible.builtin.debug:
-        msg:
-          - "CP Subnet ID    : {{ cp_subnet_id }}"
-          - "Worker Subnet ID: {{ worker_subnet_id }}"
-
-    #  3. Check if cluster already exists 
-    - name: "[CLUSTER] Check for existing ARO cluster"
+    # ── Check if cluster already exists ──────────────────────────────────
+    # FIX B: azure_rm_openshiftmanagedcluster_info replaces 'command: az aro show'
+    - name: Check for existing ARO cluster
       azure.azcollection.azure_rm_openshiftmanagedcluster_info:
         resource_group: "{{ resource_group }}"
         name:           "{{ cluster_name }}"
-      register:         existing_cluster
-      failed_when:      false
+      register: existing_cluster
+      failed_when: false
 
-    - name: "[CLUSTER] Set cluster-exists flag"
-      ansible.builtin.set_fact:
-        cluster_exists: >-
-          {{ existing_cluster.clusters is defined and
-             existing_cluster.clusters | length > 0 and
-             existing_cluster.clusters[0].provisioning_state == 'Succeeded' }}
-
-    - name: "[CLUSTER] Skip creation - cluster already in Succeeded state"
-      ansible.builtin.debug:
-        msg: >-
-          Cluster {{ cluster_name }} already exists with state
-          {{ existing_cluster.clusters[0].provisioning_state }}.
-          Skipping creation step.
-      when: cluster_exists | bool
-
-    #  4. Create ARO cluster (native azcollection module) 
-    # - name: "[CLUSTER] Create ARO cluster - {{ cluster_name }} (takes 35–50 min)"
-    #   azure.azcollection.azure_rm_openshiftmanagedcluster:
-    #     resource_group:           "{{ resource_group }}"
-    #     name:                     "{{ cluster_name }}"
-    #     location:                 "{{ location }}"
-
-    #     #  Cluster identity (UserAssigned managed identity) 
-    #     identity:
-    #       type:                   UserAssigned
-    #       user_assigned_identities:
-    #         - id:                 "{{ mi_platform_id }}"
-
-    #     #  OpenShift cluster profile 
-    #     cluster_profile:
-    #       pull_secret:            "{{ pull_secret_content }}"
-    #       domain:                 "{{ cluster_domain }}"
-    #       version:                "{{ ocp_version }}"
-    #       fips_validated_modules: "{{ fips_validated }}"
-
-    #     #  Service principal profile (replaced by managed identity) 
-    #     # For MI-based clusters this references the cluster MI clientId
-    #     service_principal_profile:
-    #       client_id:              "{{ mi_cluster_client_id }}"
-    #       client_secret:          ""      # Empty - MI-based, no secret needed
-
-    #     #  Network profile 
-    #     network_profile:
-    #       pod_cidr:               "{{ pod_cidr }}"
-    #       service_cidr:           "{{ service_cidr }}"
-    #       outbound_type:          UserDefinedRouting   # Fortinet firewall next-hop
-    #       preconfigured_nsg:      Enabled              # SDD manages NSG rules
-
-    #     #  API server profile (Private cluster) 
-    #     apiserver_profile:
-    #       visibility:             Private
-
-    #     #  Ingress profiles (Private cluster) 
-    #     ingress_profiles:
-    #       - name:                 default
-    #         visibility:           Private
-
-    #     #  Control plane (master) profile 
-    #     master_profile:
-    #       vm_size:                "{{ cp_vm_size }}"
-    #       subnet_id:              "{{ cp_subnet_id }}"
-    #       encryption_at_host:     Disabled
-
-    #     #  Worker profiles 
-    #     worker_profiles:
-    #       - name:                 worker
-    #         vm_size:              "{{ worker_vm_size }}"
-    #         subnet_id:            "{{ worker_subnet_id }}"
-    #         count:                "{{ worker_count | int }}"
-    #         disk_size_gb:         128
-    #         encryption_at_host:   Disabled
-
-    #     #  Platform workload identity profile (9 operator identities) 
-    #     # Required when deploying with managed identities (not service principal)
-    #     platform_workload_identity_profile:
-    #       platform_workload_identities:
-    #         - operator_name:      CloudControllerManager
-    #           resource_id:        "{{ mi_ccm_id }}"
-    #         - operator_name:      ClusterIngressOperator
-    #           resource_id:        "{{ mi_ingress_id }}"
-    #         - operator_name:      MachineApiOperator
-    #           resource_id:        "{{ mi_machine_api_id }}"
-    #         - operator_name:      DiskCSIDriver
-    #           resource_id:        "{{ mi_disk_csi_id }}"
-    #         - operator_name:      FileCSIDriver
-    #           resource_id:        "{{ mi_file_csi_id }}"
-    #         - operator_name:      ImageRegistryOperator
-    #           resource_id:        "{{ mi_registry_id }}"
-    #         - operator_name:      AROOperator
-    #           resource_id:        "{{ mi_svc_op_id }}"
-    #         - operator_name:      NodeBootstrapOperator
-    #           resource_id:        "{{ mi_cluster_id }}"
-
-    #     state:                    present
-
-    #   register: aro_cluster_result
-    #   when:     not (cluster_exists | bool)
-
-    - name: DEBUG - Check pull secret before normalization
+    - name: Skip creation if cluster already exists
       debug:
-        msg:
-          - "pull_secret_content TYPE  : {{ pull_secret_content | type_debug }}"
-          - "pull_secret_content SAMPLE: {{ (pull_secret_content | string)[:120] }}"
+        msg: "Cluster {{ cluster_name }} already exists ({{ existing_cluster.clusters[0].provisioning_state | default('unknown') }}). Skipping."
+      when: existing_cluster.clusters | default([]) | length > 0
 
-    - name: Normalize pull secret to proper JSON string
-      set_fact:
-        pull_secret_final: >-
-          {{ pull_secret_content
-            if (pull_secret_content is string)
-            else (pull_secret_content | to_json) }}
-
-    - name: DEBUG - Check pull secret after normalization
-      debug:
-        msg:
-          - "pull_secret_final TYPE  : {{ pull_secret_final | type_debug }}"
-          - "pull_secret_final SAMPLE: {{ (pull_secret_final | string)[:120] }}"
-    
-    - name: Extract subscription ID
-      set_fact:
-        subscription_id: "{{ mi_cluster_id.split('/')[2] }}"
-
-    - name: Create ARO cluster via ARM (FIXED)
+    # ── Create ARO cluster via ARM ────────────────────────────────────────
+    # FIX C: azure_rm_resource (ARM PUT) replaces 'command: az aro create'
+    # azure_rm_openshiftmanagedcluster does not support managed identity clusters.
+    - name: Create ARO cluster via ARM REST API (takes 35-50 minutes)
       azure.azcollection.azure_rm_resource:
         resource_group: "{{ resource_group }}"
-        provider: RedHatOpenShift
-        resource_type: openShiftClusters
-        resource_name: "{{ cluster_name }}"
-        api_version: "2025-07-25"  #2023-11-22
+        provider:       RedHatOpenShift
+        resource_type:  openShiftClusters
+        resource_name:  "{{ cluster_name }}"
+        api_version:    "2023-11-22"
+        method:         PUT
         body:
           location: "{{ location }}"
-
           identity:
             type: UserAssigned
-            userAssignedIdentities: "{{ { (mi_platform_id): {} } }}"
-              
-
+            userAssignedIdentities:
+              "{{ platform_mi_resource_id }}": {}
           properties:
             clusterProfile:
-              domain: "{{ cluster_domain }}"
-              version: "{{ ocp_version | string }}"
-              pullSecret:  "{{  pull_secret_content | string }}"
-              resourceGroupId: "/subscriptions/{{ subscription_id }}/resourceGroups/{{ aro_infra_rg }}"
-              fipsValidatedModules: "{{ fips_validated }}"
-
-            # servicePrincipalProfile:
-            #   clientId: "{{ lookup('env','AZURE_CLIENT_ID') }}"
-            #   clientSecret: "{{ lookup('env','AZURE_SECRET') }}"
-
-            networkProfile:
-              podCidr: "{{ pod_cidr }}"
-              serviceCidr: "{{ service_cidr }}"
-              outboundType: UserDefinedRouting
-              preconfigured_nsg: Enabled     
-
-            masterProfile:
-              vmSize: "{{ cp_vm_size }}"
-              subnetId: "{{ cp_subnet_id }}"
-              encryption_at_host:   Disabled
-
-            workerProfiles:
-              - name: worker
-                vmSize: "{{ worker_vm_size }}"
-                subnetId: "{{ worker_subnet_id }}"
-                count: "{{ worker_count }}"
-                diskSizeGB: 128   # ✅ FIXED (was disk_size_gb)
-                encryption_at_host:   Disabled
-
-            apiserverProfile:
-              visibility: Private
-
-            ingressProfiles:
-              - name: default
-                visibility: Private
-
-            # ✅ CRITICAL FIX: platform workload identities (ARM format)
+              domain:          "{{ domain_prefix }}.ocp.ishj.ae"
+              version:         "{{ ocp_version }}"
+              pullSecret:      "{{ lookup('file', pull_secret_path) }}"
+              resourceGroupId: "/subscriptions/{{ lookup('env','AZURE_SUBSCRIPTION_ID') }}/resourceGroups/{{ resource_group }}"
+            clusterIdentity:
+              resourceID: "{{ cluster_mi_resource_id }}"
             platformWorkloadIdentityProfile:
               platformWorkloadIdentities:
-                CloudControllerManager:
-                  resourceId: "{{ mi_ccm_id }}"
-                ClusterIngressOperator:
-                  resourceId: "{{ mi_ingress_id }}"
-                MachineApiOperator:
-                  resourceId: "{{ mi_machine_api_id }}"
-                DiskCSIDriver:
-                  resourceId: "{{ mi_disk_csi_id }}"
-                FileCSIDriver:
-                  resourceId: "{{ mi_file_csi_id }}"
-                ImageRegistryOperator:
-                  resourceId: "{{ mi_registry_id }}"
-                AROOperator:
-                  resourceId: "{{ mi_svc_op_id }}"
-                NodeBootstrapOperator:
-                  resourceId: "{{ mi_cluster_id }}"
-        state: present
-      register: aro_cluster
-      when:     not (cluster_exists | bool)
+                "aro-operator-master":
+                  resourceID: "{{ platform_mi_resource_id }}"
+            networkProfile:
+              podCidr:          "{{ pod_cidr }}"
+              serviceCidr:      "{{ service_cidr }}"
+              outboundType:     UserDefinedRouting
+              preconfiguredNSG: Enabled
+            masterProfile:
+              vmSize:   "{{ cp_vm_size }}"
+              subnetID: "/subscriptions/{{ lookup('env','AZURE_SUBSCRIPTION_ID') }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/virtualNetworks/{{ vnet_name }}/subnets/{{ cp_subnet }}"
+            workerProfiles:
+              - name:       worker
+                vmSize:     "{{ worker_vm_size }}"
+                subnetID:   "/subscriptions/{{ lookup('env','AZURE_SUBSCRIPTION_ID') }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/virtualNetworks/{{ vnet_name }}/subnets/{{ worker_subnet }}"
+                count:      "{{ worker_count | int }}"
+                diskSizeGB: 128
+            apiserverProfile:
+              visibility: Private
+            ingressProfiles:
+              - name:       default
+                visibility: Private
+      register: create_result
+      when: existing_cluster.clusters | default([]) | length == 0
 
-
-    #  5. Wait for cluster to reach Succeeded state 
-    - name: "[CLUSTER] Poll for provisioning completion (max 70 min)"
+    # ── Poll until Succeeded ──────────────────────────────────────────────
+    # FIX D: azure_rm_openshiftmanagedcluster_info replaces 'command: az aro show'
+    - name: Poll ARO cluster provisioning state
       azure.azcollection.azure_rm_openshiftmanagedcluster_info:
         resource_group: "{{ resource_group }}"
         name:           "{{ cluster_name }}"
-      register:         poll_result
-      until: >-
-        poll_result.clusters is defined and
-        poll_result.clusters | length > 0 and
-        poll_result.clusters[0].provisioning_state in
-          ['Succeeded', 'Failed', 'Canceled']
-      retries: 84      # 84 × 50s = 70 min
-      delay:   50
-      when:     not (cluster_exists | bool)
+      register: cluster_state
+      until: >
+        cluster_state.clusters[0].provisioning_state in
+        ['Succeeded', 'Failed', 'Canceled']
+      retries: 70
+      delay:   60
 
-    - name: "[CLUSTER] Fail if provisioning did not succeed"
-      ansible.builtin.fail:
-        msg: >-
-          Cluster {{ cluster_name }} ended in state
-          {{ poll_result.clusters[0].provisioning_state }}.
-          Check the Azure Portal → {{ resource_group }} → {{ cluster_name }}
-          for detailed error messages.
-      when:
-        - not (cluster_exists | bool)
-        - poll_result.clusters[0].provisioning_state != 'Succeeded'
+    - name: Fail if provisioning did not succeed
+      fail:
+        msg: "Cluster {{ cluster_name }} state: {{ cluster_state.clusters[0].provisioning_state }}. Check Azure portal."
+      when: cluster_state.clusters[0].provisioning_state != 'Succeeded'
 
-    #  6. Retrieve cluster credentials and endpoints 
-    - name: "[KUBECONFIG] Retrieve admin credentials from Azure"
-      azure.azcollection.azure_rm_resource:
-        resource_group:    "{{ resource_group }}"
-        provider:          RedHatOpenShift
-        resource_type:     openShiftClusters
-        resource_name:     "{{ cluster_name }}"
-        subresource:
-          - type: listAdminCredentials
-        api_version:       "2025-07-25" #2023-11-22
-        method:            POST
-        body:              {}
-      register: admin_creds
+    # ── Retrieve cluster endpoints ────────────────────────────────────────
+    # FIX E: Extract from already-registered cluster_state — no extra commands needed
+    - name: Set cluster endpoint facts
+      set_fact:
+        api_url:     "{{ cluster_state.clusters[0].api_server_url }}"
+        console_url: "{{ cluster_state.clusters[0].console_url }}"
 
-    - name: "[KUBECONFIG] Write kubeconfig to disk"
-      ansible.builtin.copy:
-        content:  "{{ admin_creds.response.kubeconfig | b64decode }}"
-        dest:     "{{ kubeconfig_dest }}/{{ cluster_name }}.kubeconfig"
-        mode:     "0600"
-
-    #  7. Retrieve final cluster info 
-    - name: "[INFO] Get final cluster details"
-      azure.azcollection.azure_rm_openshiftmanagedcluster_info:
-        resource_group: "{{ resource_group }}"
+    # ── Download admin kubeconfig ─────────────────────────────────────────
+    # FIX F: azure_rm_openshiftmanagedclusterkubeconfig_info replaces
+    #         'command: az aro get-admin-kubeconfig'
+    - name: Download admin kubeconfig
+      azure.azcollection.azure_rm_openshiftmanagedclusterkubeconfig_info:
         name:           "{{ cluster_name }}"
-      register: final_info
+        resource_group: "{{ resource_group }}"
+        path:           "{{ kubeconfig_dest }}/{{ cluster_name }}.kubeconfig"
 
-    - name: "[INFO] Set endpoint facts"
-      ansible.builtin.set_fact:
-        api_server_url:  "{{ final_info.clusters[0].apiserver_profile.url }}"
-        console_url:     "{{ final_info.clusters[0].ingress_profiles[0].ip | default('resolves via DNS') }}"
-        cluster_version: "{{ final_info.clusters[0].cluster_profile.version }}"
-        cluster_state:   "{{ final_info.clusters[0].provisioning_state }}"
+    # ── Verify cluster health ─────────────────────────────────────────────
+    - name: Get node status
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ kubeconfig_dest }}/{{ cluster_name }}.kubeconfig"
+        kind: Node
+      register: nodes
 
-    #  8. Validate cluster health via kubeconfig 
-    - name: "[VALIDATE] Check all cluster operators are Available"
+    - name: Count ready nodes
+      set_fact:
+        ready_nodes: >-
+          {{ nodes.resources
+             | selectattr('status.conditions', 'defined')
+             | map(attribute='status.conditions') | flatten
+             | selectattr('type', 'equalto', 'Ready')
+             | selectattr('status', 'equalto', 'True')
+             | list | length }}
+
+    # FIX G: kubernetes.core.k8s_info replaces 'command: oc get clusteroperators'
+    - name: Get cluster operator status
       kubernetes.core.k8s_info:
         kubeconfig:  "{{ kubeconfig_dest }}/{{ cluster_name }}.kubeconfig"
         api_version: config.openshift.io/v1
         kind:        ClusterOperator
       register: cluster_operators
 
-    - name: "[VALIDATE] Identify degraded or unavailable operators"
-      ansible.builtin.set_fact:
-        degraded_operators: >-
-          {{ cluster_operators.resources | selectattr('status.conditions', 'defined')
-             | selectattr('status.conditions', 'ne', [])
-             | selectattr('status.conditions | selectattr("type","equalto","Degraded")
-               | selectattr("status","equalto","True") | list | length', '>', 0)
-             | map(attribute='metadata.name') | list }}
-
-    - name: "[VALIDATE] Assert zero degraded operators"
-      ansible.builtin.assert:
-        that: degraded_operators | length == 0
-        fail_msg: >-
-          The following operators are Degraded: {{ degraded_operators | join(', ') }}.
-          Investigate before proceeding to Day 2 configuration.
-        success_msg: "All cluster operators are healthy - zero degraded."
-
-    - name: "[VALIDATE] Get node list and Ready status"
-      kubernetes.core.k8s_info:
-        kubeconfig:  "{{ kubeconfig_dest }}/{{ cluster_name }}.kubeconfig"
-        kind:        Node
-      register: node_list
-
-    - name: "[VALIDATE] Count Ready nodes"
-      ansible.builtin.set_fact:
-        ready_nodes: >-
-          {{ node_list.resources
+    - name: Check for degraded cluster operators
+      set_fact:
+        degraded_cos: >-
+          {{ cluster_operators.resources
              | selectattr('status.conditions', 'defined')
-             | map(attribute='status.conditions')
-             | map('selectattr', 'type', 'equalto', 'Ready')
-             | map('selectattr', 'status', 'equalto', 'True')
-             | map('list') | map('length')
-             | select('>', 0) | list | length }}
+             | map(attribute='status.conditions') | flatten
+             | selectattr('type', 'equalto', 'Degraded')
+             | selectattr('status', 'equalto', 'True')
+             | map(attribute='message') | list }}
 
-    - name: "[VALIDATE] Assert minimum node count (3 CP + worker_count workers)"
-      ansible.builtin.assert:
-        that: ready_nodes | int >= (3 + worker_count | int)
-        fail_msg: >-
-          Expected at least {{ 3 + worker_count | int }} Ready nodes,
-          found {{ ready_nodes }}.
-        success_msg: "{{ ready_nodes }} nodes Ready - OK."
-
-    - name: "[VALIDATE] Get available storage classes"
-      kubernetes.core.k8s_info:
-        kubeconfig:  "{{ kubeconfig_dest }}/{{ cluster_name }}.kubeconfig"
-        api_version: storage.k8s.io/v1
-        kind:        StorageClass
-      register: storage_classes
-
-    - name: "[VALIDATE] Assert managed-csi storage class is present"
-      ansible.builtin.assert:
-        that: >-
-          storage_classes.resources
-          | map(attribute='metadata.name') | list
-          | intersect(['managed-csi']) | length > 0
-        fail_msg: "managed-csi storage class not found. Azure Disk CSI may not be ready."
-        success_msg: "managed-csi storage class present - Azure Disk CSI OK."
-
-    #  9. Final deployment summary 
-    - name: "[SUMMARY] Deployment complete"
-      ansible.builtin.debug:
+    # ── Final summary ─────────────────────────────────────────────────────
+    - name: Deployment summary
+      debug:
         msg:
-          - "╔═══════════════════════════════════════════════════════════╗"
-          - "║              ARO Cluster Ready                           ║"
-          - "╚═══════════════════════════════════════════════════════════╝"
-          - ""
-          - "  Cluster Name   : {{ cluster_name }}"
-          - "  Resource Group : {{ resource_group }}"
-          - "  Domain         : {{ cluster_domain }}"
-          - "  Version        : {{ cluster_version }}"
-          - "  State          : {{ cluster_state }}"
-          - "  API Server URL : {{ api_server_url }}"
-          - "  Ready Nodes    : {{ ready_nodes }}"
-          - "  Kubeconfig     : {{ kubeconfig_dest }}/{{ cluster_name }}.kubeconfig"
-          - ""
-          - "  Next Steps:"
-          - "    Workload DR → import cluster into RHACM Hub DC (Step 2.6)"
-          - "    Hub DR      → bootstrap ArgoCD GitOps (Step 4.1)"
+          - "╔══════════════════════════════════════════════╗"
+          - "║          ARO Cluster Ready                   ║"
+          - "╚══════════════════════════════════════════════╝"
+          - "Cluster        : {{ cluster_name }}"
+          - "Resource Group : {{ resource_group }}"
+          - "State          : {{ cluster_state.clusters[0].provisioning_state }}"
+          - "API URL        : {{ api_url }}"
+          - "Console URL    : {{ console_url }}"
+          - "Ready Nodes    : {{ ready_nodes }}"
+          - "Degraded COs   : {{ degraded_cos | length }}"
+          - "Kubeconfig     : {{ kubeconfig_dest }}/{{ cluster_name }}.kubeconfig"
+          - "OCP Version    : {{ ocp_version }}"
