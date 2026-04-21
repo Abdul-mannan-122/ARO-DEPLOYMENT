@@ -383,7 +383,7 @@
             clusterProfile:
               domain: "{{ cluster_domain }}"
               version: "{{ ocp_version | string }}"
-              pullSecret: "{{ pull_secret_content }}"
+              pullSecret: "{{ pull_secret_content | to_json }}"
 
             servicePrincipalProfile:
               clientId: "{{ mi_cluster_client_id }}"
