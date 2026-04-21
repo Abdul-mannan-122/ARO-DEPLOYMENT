@@ -412,7 +412,8 @@
               fipsValidatedModules: "{{ fips_validated }}"
 
             servicePrincipalProfile:
-              clientId: "{{ mi_cluster_client_id }}"
+              clientId: "{{ lookup('env','AZURE_CLIENT_ID') }}"
+              clientSecret: "{{ lookup('env','AZURE_SECRET') }}"
 
             networkProfile:
               podCidr: "{{ pod_cidr }}"
