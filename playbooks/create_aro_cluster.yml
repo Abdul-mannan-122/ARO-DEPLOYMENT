@@ -39,7 +39,7 @@
     ocp_version: "{{ ocp_version_input | default('4.18.31') | string }}"
     cp_subnet_name:     "{{ cp_subnet_name_input     | default('cp-subnet') }}"
     worker_subnet_name: "{{ worker_subnet_name_input | default('worker-subnet') }}"
-    cp_vm_size:         "{{ cp_vm_size_input         | default('Standard_D8ds_v5') }}"
+    cp_vm_size:         "{{ cp_vm_size_input         | default('Standard_D8s_v5') }}"
     worker_vm_size:     "{{ worker_vm_size_input    | default('Standard_D16s_v5') }}"
     worker_count:       "{{ worker_count_input       | default(3)  | int }}"
     pod_cidr:           "{{ pod_cidr_input           | default('172.22.0.0/16') }}"
