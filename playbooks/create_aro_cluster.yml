@@ -364,6 +364,25 @@
     #   register: aro_cluster_result
     #   when:     not (cluster_exists | bool)
 
+    - name: DEBUG - Check pull secret before normalization
+      debug:
+        msg:
+          - "pull_secret_content TYPE  : {{ pull_secret_content | type_debug }}"
+          - "pull_secret_content SAMPLE: {{ (pull_secret_content | string)[:120] }}"
+
+    - name: Normalize pull secret to proper JSON string
+      set_fact:
+        pull_secret_final: >-
+          {{ pull_secret_content
+            if (pull_secret_content is string)
+            else (pull_secret_content | to_json) }}
+
+    - name: DEBUG - Check pull secret after normalization
+      debug:
+        msg:
+          - "pull_secret_final TYPE  : {{ pull_secret_final | type_debug }}"
+          - "pull_secret_final SAMPLE: {{ pull_secret_final[:120] }}"
+
     - name: Create ARO cluster via ARM (FIXED)
       azure.azcollection.azure_rm_resource:
         resource_group: "{{ resource_group }}"
@@ -383,7 +402,7 @@
             clusterProfile:
               domain: "{{ cluster_domain }}"
               version: "{{ ocp_version | string }}"
-              pullSecret: "{{ pull_secret_content | to_json }}"
+              pullSecret:  "{{ pull_secret_final }}"
 
             servicePrincipalProfile:
               clientId: "{{ mi_cluster_client_id }}"
