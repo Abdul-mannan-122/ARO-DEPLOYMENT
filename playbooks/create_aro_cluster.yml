@@ -488,21 +488,34 @@
       until: >-
         poll_result.clusters is defined and
         poll_result.clusters | length > 0 and
-        poll_result.clusters[0].provisioning_state in
-          ['Succeeded', 'Failed', 'Canceled']
+        poll_result.clusters[0] is defined and
+        poll_result.clusters[0].provisioning_state is defined and
+        poll_result.clusters[0].provisioning_state in ['Succeeded', 'Failed', 'Canceled']
       retries: 84      # 84 × 50s = 70 min
       delay:   50
       when:     not (cluster_exists | bool)
+
+    # - name: "[CLUSTER] Fail if provisioning did not succeed"
+    #   ansible.builtin.fail:
+    #     msg: >-
+    #       Cluster {{ cluster_name }} ended in state
+    #       {{ poll_result.clusters[0].provisioning_state }}.
+    #       Check the Azure Portal → {{ resource_group }} → {{ cluster_name }}
+    #       for detailed error messages.
+    #   when:
+    #     - not (cluster_exists | bool)
+    #     - poll_result.clusters[0].provisioning_state != 'Succeeded'
 
     - name: "[CLUSTER] Fail if provisioning did not succeed"
       ansible.builtin.fail:
         msg: >-
           Cluster {{ cluster_name }} ended in state
           {{ poll_result.clusters[0].provisioning_state }}.
-          Check the Azure Portal → {{ resource_group }} → {{ cluster_name }}
-          for detailed error messages.
+          Check Azure Portal.
       when:
         - not (cluster_exists | bool)
+        - poll_result.clusters is defined
+        - poll_result.clusters | length > 0
         - poll_result.clusters[0].provisioning_state != 'Succeeded'
 
     #  6. Retrieve cluster credentials and endpoints 
