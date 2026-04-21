@@ -1,0 +1,220 @@
+--- 
+# ══════════════════════════════════════════════════════════════════════════ 
+# Playbook: create_aro_cluster.yml 
+# Purpose:  Deploy an Azure Red Hat OpenShift cluster. 
+# Usage:    Run once for Hub DR (az3mgmtaro), once for Workload DR (az3prodaro). 
+# RG Rule:  Each cluster resource group is passed as a survey variable. 
+#           Managed identities are looked up from the cluster's own RG. 
+# ══════════════════════════════════════════════════════════════════════════ 
+  
+- name: Deploy Azure Red Hat OpenShift Cluster 
+  hosts: localhost 
+  connection: local 
+  gather_facts: false 
+  
+  vars: 
+    # ── Required survey inputs ───────────────────────────────────────── 
+    cluster_name:        "{{ cluster_name }}" 
+    resource_group:      "{{ resource_group }}" 
+    vnet_name:           "{{ vnet_name }}" 
+    pull_secret_content: "{{ pull_secret_content }}"  
+  
+    # ── Defaults (override via survey) ──────────────────────────────── 
+    location:            "{{ location | default('uaenorth') }}" 
+    cp_subnet:           "{{ cp_subnet | default('cp-subnet') }}" 
+    worker_subnet:       "{{ worker_subnet | default('worker-subnet') }}" 
+    ocp_version:         "{{ ocp_version | default('4.18.31') }}" 
+    cp_vm_size:          "{{ cp_vm_size | default('Standard_D8ds_v5') }}" 
+    worker_vm_size:      "{{ worker_vm_size | default('Standard_D16s_v5') }}" 
+    worker_count:        "{{ worker_count | default(3) | int }}" 
+    domain_prefix:       "{{ cluster_name }}" 
+    pod_cidr:            "{{ pod_cidr | default('172.22.0.0/16') }}" 
+    service_cidr:        "{{ service_cidr | default('172.23.0.0/16') }}" 
+    kubeconfig_dest:     "{{ kubeconfig_dest | default('/tmp/') }}" 
+    # Managed identity names are prefixed wdr- or hdr- matching resource_group 
+    mi_prefix:           "{{ mi_prefix }}"   # wdr or hdr — must match RG 
+  
+  tasks: 
+    - name: Set pull secret content
+      ansible.builtin.set_fact:
+        pull_secret_content: "{{ pull_secret_content }}"
+
+    - name: "[PREFLIGHT] Decode pull secret"
+      ansible.builtin.set_fact:
+        # pull_secret_content: "{{ pull_secret_b64.content | b64decode }}"
+        pull_secret_content: "{{ pull_secret_content }}"
+
+    - name: "[PREFLIGHT] Validate pull secret JSON"
+      ansible.builtin.assert:
+        that:
+          - pull_secret_content | from_json is defined
+          - (pull_secret_content | from_json).auths is defined
+        fail_msg: "Pull secret at {{ pull_secret_content }} is not valid JSON or missing 'auths' key."
+  
+    # ── Validate inputs ────────────────────────────────────────────── 
+    - name: Validate required variables 
+      assert: 
+        that: 
+          - cluster_name | length > 0 
+          - resource_group | length > 0 
+          - vnet_name | length > 0 
+          - mi_prefix in ["wdr", "hdr"] 
+        fail_msg: "Missing or invalid required variable. Check survey inputs." 
+  
+    # ── Get managed identity details from cluster RG ────────────────── 
+    - name: Get cluster managed identity ({{ mi_prefix }}-aro-cluster) 
+      command: > 
+        az identity show 
+        --name {{ mi_prefix }}-aro-cluster 
+        --resource-group {{ resource_group }} 
+        --query "{clientId:clientId,id:id}" -o json 
+      register: cluster_mi_raw 
+      changed_when: false 
+  
+    - name: Get platform managed identity ({{ mi_prefix }}-aro-platform) 
+      command: > 
+        az identity show 
+        --name {{ mi_prefix }}-aro-platform 
+        --resource-group {{ resource_group }} 
+        --query "id" -o tsv 
+      register: platform_mi_id_raw 
+      changed_when: false 
+  
+    - name: Set identity facts 
+      set_fact: 
+        cluster_mi: "{{ cluster_mi_raw.stdout | from_json }}" 
+        platform_mi_resource_id: "{{ platform_mi_id_raw.stdout }}" 
+  
+    - name: Display identity details 
+      debug: 
+        msg: 
+          - "Cluster MI client ID: {{ cluster_mi.clientId }}" 
+          - "Platform MI resource ID: {{ platform_mi_resource_id }}" 
+  
+    # ── Check if cluster already exists ────────────────────────────── 
+    - name: Check for existing cluster 
+      command: > 
+        az aro show 
+        --resource-group {{ resource_group }} 
+        --name {{ cluster_name }} 
+        --query provisioningState -o tsv 
+      register: existing_cluster 
+      failed_when: false 
+      changed_when: false 
+  
+    - name: Skip creation if cluster already exists 
+      debug: 
+        msg: "Cluster {{ cluster_name }} already exists ({{ existing_cluster.stdout }}). Skipping creation." 
+      when: existing_cluster.rc == 0 
+  
+    # ── Create ARO cluster ──────────────────────────────────────────── 
+    - name: Create ARO cluster (takes 35-50 minutes) 
+      when: existing_cluster.rc != 0 
+      command: > 
+        az aro create 
+        --resource-group {{ resource_group }} 
+        --name {{ cluster_name }} 
+        --location {{ location }} 
+        --vnet {{ vnet_name }} 
+        --vnet-resource-group {{ resource_group }} 
+        --master-subnet {{ cp_subnet }} 
+        --worker-subnet {{ worker_subnet }} 
+        --master-vm-size {{ cp_vm_size }} 
+        --worker-vm-size {{ worker_vm_size }} 
+        --worker-count {{ worker_count }} 
+        --version {{ ocp_version }} 
+        --domain {{ domain_prefix }}.ocp.ishj.ae 
+        --apiserver-visibility Private 
+        --ingress-visibility Private 
+        --outbound-type UserDefinedRouting 
+        --enable-preconfigured-nsg 
+        --client-id {{ cluster_mi.clientId }} 
+        --mi-user-assigned {{ platform_mi_resource_id }} 
+        --pull-secret @{{ pull_secret_path }} 
+      async: 3600 
+      poll: 0 
+      register: create_job 
+  
+    - name: Wait for ARO cluster creation to complete 
+      when: existing_cluster.rc != 0 
+      async_status: 
+        jid: "{{ create_job.ansible_job_id }}" 
+      register: create_result 
+      until: create_result.finished 
+      retries: 60 
+      delay: 60 
+  
+    # ── Wait for Succeeded state ────────────────────────────────────── 
+    - name: Poll cluster provisioning state 
+      command: > 
+        az aro show 
+        --resource-group {{ resource_group }} 
+        --name {{ cluster_name }} 
+        --query provisioningState -o tsv 
+      register: pstate 
+      until: pstate.stdout in ["Succeeded", "Failed", "Canceled"] 
+      retries: 70 
+      delay: 60 
+      changed_when: false 
+  
+    - name: Fail if provisioning failed 
+      fail: 
+        msg: "Cluster {{ cluster_name }} provisioning {{ pstate.stdout }}. Check Azure portal." 
+      when: pstate.stdout != "Succeeded" 
+  
+    # ── Retrieve cluster information ────────────────────────────────── 
+    - name: Get API server URL 
+      command: az aro show --resource-group {{ resource_group }} --name {{ cluster_name }} --query apiserverProfile.url -o tsv 
+      register: api_url 
+      changed_when: false 
+  
+    - name: Get console URL 
+      command: az aro show --resource-group {{ resource_group }} --name {{ cluster_name }} --query consoleProfile.url -o tsv 
+      register: console_url 
+      changed_when: false 
+  
+    - name: Download admin kubeconfig 
+      command: > 
+        az aro get-admin-kubeconfig 
+        --resource-group {{ resource_group }} 
+        --name {{ cluster_name }} 
+        --file {{ kubeconfig_dest }}/{{ cluster_name }}.kubeconfig 
+  
+    # ── Verify cluster health ───────────────────────────────────────── 
+    - name: Get node status 
+      kubernetes.core.k8s_info: 
+        kubeconfig: "{{ kubeconfig_dest }}/{{ cluster_name }}.kubeconfig" 
+        kind: Node 
+      register: nodes 
+  
+    - name: Count ready nodes 
+      set_fact: 
+        ready_nodes: >- 
+          {{ nodes.resources | selectattr("status.conditions","defined") | 
+             map(attribute="status.conditions") | flatten | 
+             selectattr("type","equalto","Ready") | 
+             selectattr("status","equalto","True") | list | length }} 
+  
+    - name: Check all cluster operators 
+      command: > 
+        oc get clusteroperators 
+        --kubeconfig {{ kubeconfig_dest }}/{{ cluster_name }}.kubeconfig 
+        -o jsonpath="{range .items[*]}{.metadata.name} {.status.conditions[?(@.type=="Available")].status} {.status.conditions[?(@.type=="Degraded")].status}{"\n"}{end}" 
+      register: co_status 
+      changed_when: false 
+  
+    # ── Final summary ───────────────────────────────────────────────── 
+    - name: Deployment summary 
+      debug: 
+        msg: 
+          - "╔══════════════════════════════════════════════╗" 
+          - "║  ARO Cluster Ready                           ║" 
+          - "╚══════════════════════════════════════════════╝" 
+          - "Cluster:       {{ cluster_name }}" 
+          - "Resource Group:{{ resource_group }}" 
+          - "State:         {{ pstate.stdout }}" 
+          - "API URL:       {{ api_url.stdout }}" 
+          - "Console URL:   {{ console_url.stdout }}" 
+          - "Ready Nodes:   {{ ready_nodes }}" 
+          - "Kubeconfig:    {{ kubeconfig_dest }}/{{ cluster_name }}.kubeconfig" 
+          - "OCP Version:   {{ ocp_version }}" 
