@@ -421,7 +421,7 @@
             clusterProfile:
               domain: "{{ cluster_domain }}"
               version: "{{ ocp_version | string }}"
-              pullSecret:  "{{  pull_secret_content | string }}"
+              pullSecret:  "{{ pull_secret_final }}"
               resourceGroupId: "/subscriptions/{{ subscription_id }}/resourceGroups/{{ aro_infra_rg }}"
               fipsValidatedModules: "{{ fips_validated }}"
 
