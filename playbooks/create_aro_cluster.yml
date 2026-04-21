@@ -49,6 +49,7 @@
     kubeconfig_dest:    "{{ kubeconfig_dest_input    | default('/tmp') }}"
     fips_validated:     "{{ 'Enabled' if (fips_validated_input | default(false, true) | bool) else 'Disabled' }}"
     aro_infra_rg: "{{ aro_infra_rg_input | default(resource_group ~ '-infra') }}"
+    encryption_at_host: "{{ encryption_at_host_input | default('Disabled') }}"
 
     #  Derived / computed 
     cluster_domain:     "{{ cluster_name }}.ocp.ishj.ae"
@@ -424,7 +425,7 @@
             masterProfile:
               vmSize: "{{ cp_vm_size }}"
               subnetId: "{{ cp_subnet_id }}"
-              encryption_at_host: false
+              encryptionAtHost: "{{ encryption_at_host | default('Disabled') }}"
 
             workerProfiles:
               - name: worker
@@ -432,7 +433,7 @@
                 subnetId: "{{ worker_subnet_id }}"
                 count: "{{ worker_count }}"
                 diskSizeGB: 128   # ✅ FIXED (was disk_size_gb)
-                encryption_at_host: false
+                encryptionAtHost: "{{ encryption_at_host | default('Disabled') }}"
 
             apiserverProfile:
               visibility: Private
