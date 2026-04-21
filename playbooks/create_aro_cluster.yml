@@ -66,6 +66,7 @@
       machine_api:            "{{ mi_prefix }}-aro-machine-api"
       service_operator:       "{{ mi_prefix }}-aro-service-operator"
       platform:               "{{ mi_prefix }}-aro-platform"
+      network:                "{{ mi_prefix }}-aro-network-id"
 
   #  Pre-flight input validation 
   pre_tasks:
@@ -197,6 +198,15 @@
         resource_name:        "{{ mi_names.machine_api }}"
         api_version:          "2023-01-31"
       register: mi_machine_api_info
+    
+    - name: "[MI] Get network identity - {{ mi_names.network_id }}"
+      azure.azcollection.azure_rm_resource_info:
+        resource_group:       "{{ resource_group }}"
+        provider:             ManagedIdentity
+        resource_type:        userAssignedIdentities
+        resource_name:        "{{ mi_names.network_id }}"
+        api_version:          "2023-01-31"
+      register: mi_network_id_info
 
     - name: "[MI] Get service operator identity - {{ mi_names.service_operator }}"
       azure.azcollection.azure_rm_resource_info:
@@ -218,7 +228,9 @@
         mi_registry_id:       "{{ mi_registry_info.response[0].id }}"
         mi_ingress_id:        "{{ mi_ingress_info.response[0].id }}"
         mi_machine_api_id:    "{{ mi_machine_api_info.response[0].id }}"
+        mi_machine_api_id:    "{{ mi_networ_id_info.response[0].id }}"
         mi_svc_op_id:         "{{ mi_svc_op_info.response[0].id }}"
+
 
     - name: "[MI] Display identity facts"
       ansible.builtin.debug:
@@ -232,6 +244,7 @@
           - "Registry MI     : {{ mi_registry_id }}"
           - "Ingress MI      : {{ mi_ingress_id }}"
           - "Machine API MI  : {{ mi_machine_api_id }}"
+          - "Network ID  : {{ mi_network_id_id }}"
           - "Service Op MI   : {{ mi_svc_op_id }}"
 
     #  2. Retrieve subnet resource IDs 
@@ -449,8 +462,8 @@
                   resourceId: "{{ mi_svc_op_id }}"
                 cloud-controller-manager:
                   resourceId: "{{ mi_ccm_id }}"
-                # cloud-network-config:
-                #   resourceId: "{{ mi_network_id }}"
+                cloud-network-config:
+                  resourceId: "{{ mi_network_id }}"
                 disk-csi-driver:
                   resourceId: "{{ mi_disk_csi_id }}"
                 file-csi-driver:
