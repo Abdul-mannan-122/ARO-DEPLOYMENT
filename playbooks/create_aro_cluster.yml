@@ -445,22 +445,22 @@
             # ✅ CRITICAL FIX: platform workload identities (ARM format)
             platformWorkloadIdentityProfile:
               platformWorkloadIdentities:
-                CloudControllerManager:
-                  resourceId: "{{ mi_ccm_id }}"
-                ClusterIngressOperator:
-                  resourceId: "{{ mi_ingress_id }}"
-                MachineApiOperator:
-                  resourceId: "{{ mi_machine_api_id }}"
-                DiskCSIDriver:
-                  resourceId: "{{ mi_disk_csi_id }}"
-                FileCSIDriver:
-                  resourceId: "{{ mi_file_csi_id }}"
-                ImageRegistryOperator:
-                  resourceId: "{{ mi_registry_id }}"
-                AROOperator:
+                aro-operator:
                   resourceId: "{{ mi_svc_op_id }}"
-                NodeBootstrapOperator:
-                  resourceId: "{{ mi_cluster_id }}"
+                cloud-controller-manager:
+                  resourceId: "{{ mi_ccm_id }}"
+                cloud-network-config:
+                  resourceId: "{{ mi_network_id }}"
+                disk-csi-driver:
+                  resourceId: "{{ mi_disk_csi_id }}"
+                file-csi-driver:
+                  resourceId: "{{ mi_file_csi_id }}"
+                image-registry:
+                  resourceId: "{{ mi_registry_id }}"
+                ingress:
+                  resourceId: "{{ mi_ingress_id }}"
+                machine-api:
+                  resourceId: "{{ mi_machine_api_id }}"
         state: present
       register: aro_cluster
       when:     not (cluster_exists | bool)
