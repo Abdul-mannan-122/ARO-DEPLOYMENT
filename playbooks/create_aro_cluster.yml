@@ -21,7 +21,7 @@
     cluster_name:      "{{ cluster_name }}"
     resource_group:    "{{ resource_group }}"
     vnet_name:         "{{ vnet_name }}"
-    pull_secret:  "{{ pull_secret }}"
+    pull_secret:  "{{ pull_secret_input }}"
 
     # ── Defaults (override via survey) ─────────────────────────────────────
     location:          '{{ location         | default("uaenorth") }}'
