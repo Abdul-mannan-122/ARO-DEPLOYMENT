@@ -424,6 +424,7 @@
             masterProfile:
               vmSize: "{{ cp_vm_size }}"
               subnetId: "{{ cp_subnet_id }}"
+              encryption_at_host:   Disabled
 
             workerProfiles:
               - name: worker
