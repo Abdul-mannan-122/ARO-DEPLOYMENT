@@ -409,6 +409,7 @@
               version: "{{ ocp_version | string }}"
               pullSecret:  "{{  pull_secret_content | string }}"
               resourceGroupId: "/subscriptions/{{ subscription_id }}/resourceGroups/{{ aro_infra_rg }}"
+              fipsValidatedModules: "{{ fips_validated }}"
 
             servicePrincipalProfile:
               clientId: "{{ mi_cluster_client_id }}"
