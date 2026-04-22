@@ -446,7 +446,7 @@
             clusterProfile:
               domain: "{{ cluster_domain }}"
               version: "{{ ocp_version | string }}"
-              pullSecret:  "{{ pull_secret_final }}"
+              pullSecret: "{{ pull_secret_dict | to_json | string }}"
               resourceGroupId: "/subscriptions/{{ subscription_id }}/resourceGroups/{{ aro_infra_rg }}"
               fipsValidatedModules: "{{ fips_validated }}"
 
