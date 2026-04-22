@@ -110,19 +110,25 @@
           - pull_secret_content | length > 0
         fail_msg: "pull_secret_content must be provided via survey"
 
-    - name: "[PREFLIGHT] Normalize pull secret"
-      ansible.builtin.set_fact:
-        pull_secret_final: >-
-          {{ pull_secret_content
-            if pull_secret_content is string
-            else (pull_secret_content | to_json) }}
+    - name: "[PREFLIGHT] Normalize pull secret to dict"
+      set_fact:
+        pull_secret_dict: >-
+          {{
+            pull_secret_content
+            if pull_secret_content is mapping
+            else (pull_secret_content | from_json)
+          }}
 
-    - name: "[PREFLIGHT] Validate pull secret JSON"
-      ansible.builtin.assert:
+    - name: "[PREFLIGHT] Validate pull secret structure"
+      assert:
         that:
-          - pull_secret_final | from_json is defined
-          - (pull_secret_final | from_json).auths is defined
-        fail_msg: "Pull secret is invalid"
+          - pull_secret_dict is mapping
+          - pull_secret_dict.auths is defined
+        fail_msg: "Pull secret invalid or missing 'auths'"
+    
+    - name: "[PREFLIGHT] Convert pull secret to JSON string"
+      set_fact:
+        pull_secret_final: "{{ pull_secret_dict | to_json }}"
 
   tasks:
     - name: Install ARO SDK
