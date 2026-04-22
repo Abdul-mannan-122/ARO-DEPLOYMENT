@@ -450,9 +450,9 @@
               resourceGroupId: "/subscriptions/{{ subscription_id }}/resourceGroups/{{ aro_infra_rg }}"
               fipsValidatedModules: "{{ fips_validated }}"
 
-            # servicePrincipalProfile:
-            #   clientId: "{{ lookup('env','AZURE_CLIENT_ID') }}"
-            #   clientSecret: "{{ lookup('env','AZURE_SECRET') }}"
+            servicePrincipalProfile:
+              clientId: "{{ lookup('env','AZURE_CLIENT_ID') }}"
+              clientSecret: "{{ lookup('env','AZURE_SECRET') }}"
 
             networkProfile:
               podCidr: "{{ pod_cidr }}"
