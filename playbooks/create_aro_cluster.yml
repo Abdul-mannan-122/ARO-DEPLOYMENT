@@ -505,26 +505,28 @@
 
 
     #  5. Wait for cluster to reach Succeeded state 
-    - name: "[CLUSTER] Poll for provisioning completion (fail fast)"
+    - name: "[CLUSTER] Poll for provisioning completion"
       azure.azcollection.azure_rm_openshiftmanagedcluster_info:
         resource_group: "{{ resource_group }}"
         name: "{{ cluster_name }}"
       register: poll_result
 
-      until: >
-        poll_result.clusters is defined and
-        poll_result.clusters | length > 0 and
-        (poll_result.clusters[0].provisioning_state | default('')) == 'Succeeded'
+      until: cluster_state in ['Succeeded', 'Failed', 'Canceled']
 
       retries: 84
       delay: 50
 
-      failed_when: >
-        poll_result.clusters is defined and
-        poll_result.clusters | length > 0 and
-        (poll_result.clusters[0].provisioning_state | default('')) in ['Failed', 'Canceled']
+      vars:
+        cluster_state: >-
+          {{
+            (poll_result.clusters.properties.provisioningState
+            if (poll_result.clusters is defined and
+                poll_result.clusters.properties is defined and
+                poll_result.clusters.properties.provisioningState is defined)
+            else 'Unknown')
+          }}
 
-      when: not (cluster_exists | bool)
+      failed_when: cluster_state in ['Failed', 'Canceled']
 
     # - name: "[CLUSTER] Fail if provisioning did not succeed"
     #   ansible.builtin.fail:
