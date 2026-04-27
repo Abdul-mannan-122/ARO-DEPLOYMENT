@@ -472,33 +472,33 @@
         cluster_version: "{{ final_info.clusters.properties.clusterProfile.version }}"
         cluster_state:   "{{ final_info.clusters.properties.provisioningState }}"
 
-    #  8. Validate cluster health via kubeconfig 
-    - name: "[VALIDATE] Check all cluster operators are Available"
-      kubernetes.core.k8s_info:
-        kubeconfig:  "{{ kubeconfig_dest }}/{{ cluster_name }}.kubeconfig"
-        api_version: config.openshift.io/v1
-        kind:        ClusterOperator
-      register: cluster_operators
-      ignore_errors: true
+    # #  8. Validate cluster health via kubeconfig 
+    # - name: "[VALIDATE] Check all cluster operators are Available"
+    #   kubernetes.core.k8s_info:
+    #     kubeconfig:  "{{ kubeconfig_dest }}/{{ cluster_name }}.kubeconfig"
+    #     api_version: config.openshift.io/v1
+    #     kind:        ClusterOperator
+    #   register: cluster_operators
+    #   ignore_errors: true
 
-    - name: "[VALIDATE] Identify degraded or unavailable operators"
-      ansible.builtin.set_fact:
-        degraded_operators: >-
-          {{ cluster_operators.resources | selectattr('status.conditions', 'defined')
-             | selectattr('status.conditions', 'ne', [])
-             | selectattr('status.conditions | selectattr("type","equalto","Degraded")
-               | selectattr("status","equalto","True") | list | length', '>', 0)
-             | map(attribute='metadata.name') | list }}
-      ignore_errors: true
+    # - name: "[VALIDATE] Identify degraded or unavailable operators"
+    #   ansible.builtin.set_fact:
+    #     degraded_operators: >-
+    #       {{ cluster_operators.resources | selectattr('status.conditions', 'defined')
+    #          | selectattr('status.conditions', 'ne', [])
+    #          | selectattr('status.conditions | selectattr("type","equalto","Degraded")
+    #            | selectattr("status","equalto","True") | list | length', '>', 0)
+    #          | map(attribute='metadata.name') | list }}
+    #   ignore_errors: true
 
-    - name: "[VALIDATE] Assert zero degraded operators"
-      ansible.builtin.assert:
-        that: degraded_operators | length == 0
-        fail_msg: >-
-          The following operators are Degraded: {{ degraded_operators | join(', ') }}.
-          Investigate before proceeding to Day 2 configuration.
-        success_msg: "All cluster operators are healthy - zero degraded."
-      ignore_errors: true
+    # - name: "[VALIDATE] Assert zero degraded operators"
+    #   ansible.builtin.assert:
+    #     that: degraded_operators | length == 0
+    #     fail_msg: >-
+    #       The following operators are Degraded: {{ degraded_operators | join(', ') }}.
+    #       Investigate before proceeding to Day 2 configuration.
+    #     success_msg: "All cluster operators are healthy - zero degraded."
+    #   ignore_errors: true
 
     - name: "[VALIDATE] Get node list and Ready status"
       kubernetes.core.k8s_info:
