@@ -433,7 +433,7 @@
           {{ poll_result.clusters.properties.provisioningState }}.
           Check Azure Portal.
       when:
-        - not (cluster_exists | bool)
+        # - not (cluster_exists | bool)
         - poll_result.clusters is defined
         - poll_result.clusters.properties is defined
         - poll_result.clusters.properties.provisioningState != 'Succeeded'
