@@ -467,10 +467,10 @@
 
     - name: "[INFO] Set endpoint facts"
       ansible.builtin.set_fact:
-        api_server_url:  "{{ final_info.clusters[0].apiserver_profile.url }}"
-        console_url:     "{{ final_info.clusters[0].ingress_profiles[0].ip | default('resolves via DNS') }}"
-        cluster_version: "{{ final_info.clusters[0].cluster_profile.version }}"
-        cluster_state:   "{{ final_info.clusters[0].provisioning_state }}"
+        api_server_url:  "{{ final_info.clusters.properties.apiserverProfile.url }}"
+        console_url:     "{{ final_info.clusters.properties.consoleProfile.url }}"
+        cluster_version: "{{ final_info.clusters.properties.clusterProfile.version }}"
+        cluster_state:   "{{ final_info.clusters.properties.provisioningState }}"
 
     #  8. Validate cluster health via kubeconfig 
     - name: "[VALIDATE] Check all cluster operators are Available"
