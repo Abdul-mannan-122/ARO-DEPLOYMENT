@@ -479,6 +479,7 @@
         api_version: config.openshift.io/v1
         kind:        ClusterOperator
       register: cluster_operators
+      ignore_errors: true
 
     - name: "[VALIDATE] Identify degraded or unavailable operators"
       ansible.builtin.set_fact:
