@@ -517,7 +517,7 @@
              | map('selectattr', 'status', 'equalto', 'True')
              | map('list') | map('length')
              | select('>', 0) | list | length }}
-      ignore_errors: true
+      
 
     - name: "[VALIDATE] Assert minimum node count (3 CP + worker_count workers)"
       ansible.builtin.assert:
@@ -526,7 +526,7 @@
           Expected at least {{ 3 + worker_count | int }} Ready nodes,
           found {{ ready_nodes }}.
         success_msg: "{{ ready_nodes }} nodes Ready - OK.
-      ignore_errors: true
+     
 
     - name: "[VALIDATE] Get available storage classes"
       kubernetes.core.k8s_info:
@@ -534,7 +534,7 @@
         api_version: storage.k8s.io/v1
         kind:        StorageClass
       register: storage_classes
-      ignore_errors: true
+   
 
     - name: "[VALIDATE] Assert managed-csi storage class is present"
       ansible.builtin.assert:
@@ -544,7 +544,7 @@
           | intersect(['managed-csi']) | length > 0
         fail_msg: "managed-csi storage class not found. Azure Disk CSI may not be ready."
         success_msg: "managed-csi storage class present - Azure Disk CSI OK."
-      ignore_errors: true 
+    
 
     #  9. Final deployment summary 
     - name: "[SUMMARY] Deployment complete"
