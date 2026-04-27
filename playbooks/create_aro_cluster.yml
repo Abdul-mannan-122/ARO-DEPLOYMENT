@@ -517,7 +517,7 @@
              | map('selectattr', 'status', 'equalto', 'True')
              | map('list') | map('length')
              | select('>', 0) | list | length }}
-        ignore_errors: true
+      ignore_errors: true
 
     - name: "[VALIDATE] Assert minimum node count (3 CP + worker_count workers)"
       ansible.builtin.assert:
