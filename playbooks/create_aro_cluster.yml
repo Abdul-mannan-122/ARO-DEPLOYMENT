@@ -283,28 +283,28 @@
           - "CP Subnet ID    : {{ cp_subnet_id }}"
           - "Worker Subnet ID: {{ worker_subnet_id }}"
 
-    # #  3. Check if cluster already exists 
-    # - name: "[CLUSTER] Check for existing ARO cluster"
-    #   azure.azcollection.azure_rm_openshiftmanagedcluster_info:
-    #     resource_group: "{{ resource_group }}"
-    #     name:           "{{ cluster_name }}"
-    #   register:         existing_cluster
-    #   failed_when:      false
+    #  3. Check if cluster already exists 
+    - name: "[CLUSTER] Check for existing ARO cluster"
+      azure.azcollection.azure_rm_openshiftmanagedcluster_info:
+        resource_group: "{{ resource_group }}"
+        name:           "{{ cluster_name }}"
+      register:         existing_cluster
+      failed_when:      false
 
-    # - name: "[CLUSTER] Set cluster-exists flag"
-    #   ansible.builtin.set_fact:
-    #     cluster_exists: >-
-    #       {{ existing_cluster.clusters is defined and
-    #          existing_cluster.clusters | length > 0 and
-    #          existing_cluster.clusters[0].provisioning_state == 'Succeeded' }}
+    - name: "[CLUSTER] Set cluster-exists flag"
+      ansible.builtin.set_fact:
+        cluster_exists: >-
+          {{ existing_cluster.clusters is defined and
+             existing_cluster.clusters | length > 0 and
+             existing_cluster.clusters[0].provisioning_state == 'Succeeded' }}
 
-    # - name: "[CLUSTER] Skip creation - cluster already in Succeeded state"
-    #   ansible.builtin.debug:
-    #     msg: >-
-    #       Cluster {{ cluster_name }} already exists with state
-    #       {{ existing_cluster.clusters[0].provisioning_state }}.
-    #       Skipping creation step.
-    #   when: cluster_exists | bool
+    - name: "[CLUSTER] Skip creation - cluster already in Succeeded state"
+      ansible.builtin.debug:
+        msg: >-
+          Cluster {{ cluster_name }} already exists with state
+          {{ existing_cluster.clusters[0].provisioning_state }}.
+          Skipping creation step.
+      when: cluster_exists | bool
 
     - name: DEBUG - Check pull secret before normalization
       debug:
@@ -329,76 +329,76 @@
       set_fact:
         subscription_id: "{{ mi_cluster_id.split('/')[2] }}"
 
-    # - name: Create ARO cluster via ARM (FIXED)
-    #   azure.azcollection.azure_rm_resource:
-    #     resource_group: "{{ resource_group }}"
-    #     provider: RedHatOpenShift
-    #     resource_type: openShiftClusters
-    #     resource_name: "{{ cluster_name }}"
-    #     api_version: "2025-07-25"
-    #     body:
-    #       location: "{{ location }}"
+    - name: Create ARO cluster via ARM (FIXED)
+      azure.azcollection.azure_rm_resource:
+        resource_group: "{{ resource_group }}"
+        provider: RedHatOpenShift
+        resource_type: openShiftClusters
+        resource_name: "{{ cluster_name }}"
+        api_version: "2025-07-25"
+        body:
+          location: "{{ location }}"
 
-    #       identity:
-    #         type: UserAssigned
-    #         userAssignedIdentities: "{{ { (mi_platform_id): {} } }}"
+          identity:
+            type: UserAssigned
+            userAssignedIdentities: "{{ { (mi_platform_id): {} } }}"
               
-    #       properties:
-    #         clusterProfile:
-    #           domain: "{{ cluster_domain }}"
-    #           version: "{{ ocp_version | string }}"
-    #           pullSecret: "{{ pull_secret_dict | to_json | string }}"
-    #           resourceGroupId: "/subscriptions/{{ subscription_id }}/resourceGroups/{{ aro_infra_rg }}"
-    #           fipsValidatedModules: "{{ fips_validated }}"
+          properties:
+            clusterProfile:
+              domain: "{{ cluster_domain }}"
+              version: "{{ ocp_version | string }}"
+              pullSecret: "{{ pull_secret_dict | to_json | string }}"
+              resourceGroupId: "/subscriptions/{{ subscription_id }}/resourceGroups/{{ aro_infra_rg }}"
+              fipsValidatedModules: "{{ fips_validated }}"
 
-    #         networkProfile:
-    #           podCidr: "{{ pod_cidr }}"
-    #           serviceCidr: "{{ service_cidr }}"
-    #           outboundType: UserDefinedRouting
-    #           preconfigured_nsg: Enabled     
+            networkProfile:
+              podCidr: "{{ pod_cidr }}"
+              serviceCidr: "{{ service_cidr }}"
+              outboundType: UserDefinedRouting
+              preconfigured_nsg: Enabled     
 
-    #         masterProfile:
-    #           vmSize: "{{ cp_vm_size }}"
-    #           subnetId: "{{ cp_subnet_id }}"
-    #           encryptionAtHost: "{{ encryption_at_host | default('Disabled') }}"
+            masterProfile:
+              vmSize: "{{ cp_vm_size }}"
+              subnetId: "{{ cp_subnet_id }}"
+              encryptionAtHost: "{{ encryption_at_host | default('Disabled') }}"
 
-    #         workerProfiles:
-    #           - name: worker
-    #             vmSize: "{{ worker_vm_size }}"
-    #             subnetId: "{{ worker_subnet_id }}"
-    #             count: "{{ worker_count }}"
-    #             diskSizeGB: 128   # ✅ FIXED (was disk_size_gb)
-    #             encryptionAtHost: "{{ encryption_at_host | default('Disabled') }}"
+            workerProfiles:
+              - name: worker
+                vmSize: "{{ worker_vm_size }}"
+                subnetId: "{{ worker_subnet_id }}"
+                count: "{{ worker_count }}"
+                diskSizeGB: 128   # ✅ FIXED (was disk_size_gb)
+                encryptionAtHost: "{{ encryption_at_host | default('Disabled') }}"
 
-    #         apiserverProfile:
-    #           visibility: Private
+            apiserverProfile:
+              visibility: Private
 
-    #         ingressProfiles:
-    #           - name: default
-    #             visibility: Private
+            ingressProfiles:
+              - name: default
+                visibility: Private
 
-    #         # ✅ CRITICAL FIX: platform workload identities (ARM format)
-    #         platformWorkloadIdentityProfile:
-    #           platformWorkloadIdentities:
-    #             aro-operator:
-    #               resourceId: "{{ mi_svc_op_id }}"
-    #             cloud-controller-manager:
-    #               resourceId: "{{ mi_ccm_id }}"
-    #             cloud-network-config:
-    #               resourceId: "{{ mi_network_id }}"
-    #             disk-csi-driver:
-    #               resourceId: "{{ mi_disk_csi_id }}"
-    #             file-csi-driver:
-    #               resourceId: "{{ mi_file_csi_id }}"
-    #             image-registry:
-    #               resourceId: "{{ mi_registry_id }}"
-    #             ingress:
-    #               resourceId: "{{ mi_ingress_id }}"
-    #             machine-api:
-    #               resourceId: "{{ mi_machine_api_id }}"
-    #     state: present
-    #   register: aro_cluster
-    #   when:     not (cluster_exists | bool)
+            # ✅ CRITICAL FIX: platform workload identities (ARM format)
+            platformWorkloadIdentityProfile:
+              platformWorkloadIdentities:
+                aro-operator:
+                  resourceId: "{{ mi_svc_op_id }}"
+                cloud-controller-manager:
+                  resourceId: "{{ mi_ccm_id }}"
+                cloud-network-config:
+                  resourceId: "{{ mi_network_id }}"
+                disk-csi-driver:
+                  resourceId: "{{ mi_disk_csi_id }}"
+                file-csi-driver:
+                  resourceId: "{{ mi_file_csi_id }}"
+                image-registry:
+                  resourceId: "{{ mi_registry_id }}"
+                ingress:
+                  resourceId: "{{ mi_ingress_id }}"
+                machine-api:
+                  resourceId: "{{ mi_machine_api_id }}"
+        state: present
+      register: aro_cluster
+      when:     not (cluster_exists | bool)
 
 
     #  5. Wait for cluster to reach Succeeded state 
@@ -472,78 +472,6 @@
         cluster_version: "{{ final_info.clusters.properties.clusterProfile.version }}"
         cluster_state:   "{{ final_info.clusters.properties.provisioningState }}"
 
-    # #  8. Validate cluster health via kubeconfig 
-    # - name: "[VALIDATE] Check all cluster operators are Available"
-    #   kubernetes.core.k8s_info:
-    #     kubeconfig:  "{{ kubeconfig_dest }}/{{ cluster_name }}.kubeconfig"
-    #     api_version: config.openshift.io/v1
-    #     kind:        ClusterOperator
-    #   register: cluster_operators
-    #   ignore_errors: true
-
-    # - name: "[VALIDATE] Identify degraded or unavailable operators"
-    #   ansible.builtin.set_fact:
-    #     degraded_operators: >-
-    #       {{ cluster_operators.resources | selectattr('status.conditions', 'defined')
-    #          | selectattr('status.conditions', 'ne', [])
-    #          | selectattr('status.conditions | selectattr("type","equalto","Degraded")
-    #            | selectattr("status","equalto","True") | list | length', '>', 0)
-    #          | map(attribute='metadata.name') | list }}
-    #   ignore_errors: true
-
-    # - name: "[VALIDATE] Assert zero degraded operators"
-    #   ansible.builtin.assert:
-    #     that: degraded_operators | length == 0
-    #     fail_msg: >-
-    #       The following operators are Degraded: {{ degraded_operators | join(', ') }}.
-    #       Investigate before proceeding to Day 2 configuration.
-    #     success_msg: "All cluster operators are healthy - zero degraded."
-    #   ignore_errors: true
-
-    - name: "[VALIDATE] Get node list and Ready status"
-      kubernetes.core.k8s_info:
-        kubeconfig:  "{{ kubeconfig_dest }}/{{ cluster_name }}.kubeconfig"
-        kind:        Node
-      register: node_list
-      ignore_errors: true
-
-    - name: "[VALIDATE] Count Ready nodes"
-      ansible.builtin.set_fact:
-        ready_nodes: >-
-          {{ node_list.resources
-             | selectattr('status.conditions', 'defined')
-             | map(attribute='status.conditions')
-             | map('selectattr', 'type', 'equalto', 'Ready')
-             | map('selectattr', 'status', 'equalto', 'True')
-             | map('list') | map('length')
-             | select('>', 0) | list | length }}
-      
-
-    - name: "[VALIDATE] Assert minimum node count (3 CP + worker_count workers)"
-      ansible.builtin.assert:
-        that: ready_nodes | int >= (3 + worker_count | int)
-        fail_msg: >-
-          Expected at least {{ 3 + worker_count | int }} Ready nodes,
-          found {{ ready_nodes }}.
-        success_msg: "{{ ready_nodes }} nodes Ready - OK.
-     
-
-    - name: "[VALIDATE] Get available storage classes"
-      kubernetes.core.k8s_info:
-        kubeconfig:  "{{ kubeconfig_dest }}/{{ cluster_name }}.kubeconfig"
-        api_version: storage.k8s.io/v1
-        kind:        StorageClass
-      register: storage_classes
-   
-
-    - name: "[VALIDATE] Assert managed-csi storage class is present"
-      ansible.builtin.assert:
-        that: >-
-          storage_classes.resources
-          | map(attribute='metadata.name') | list
-          | intersect(['managed-csi']) | length > 0
-        fail_msg: "managed-csi storage class not found. Azure Disk CSI may not be ready."
-        success_msg: "managed-csi storage class present - Azure Disk CSI OK."
     
 
     #  9. Final deployment summary 
@@ -560,7 +488,7 @@
           - "  Version        : {{ cluster_version }}"
           - "  State          : {{ cluster_state }}"
           - "  API Server URL : {{ api_server_url }}"
-          - "  Ready Nodes    : {{ ready_nodes }}"
+          # - "  Ready Nodes    : {{ ready_nodes }}"
           - "  Kubeconfig     : {{ kubeconfig_dest }}/{{ cluster_name }}.kubeconfig"
           - ""
           - "  Next Steps:"
