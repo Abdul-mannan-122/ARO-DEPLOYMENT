@@ -437,13 +437,13 @@
       ansible.builtin.fail:
         msg: >-
           Cluster {{ cluster_name }} ended in state
-          {{ poll_result.clusters[0].provisioning_state }}.
+          {{ poll_result.clusters.properties.provisioningState }}.
           Check Azure Portal.
       when:
         - not (cluster_exists | bool)
         - poll_result.clusters is defined
-        - poll_result.clusters | length > 0
-        - poll_result.clusters[0].provisioning_state != 'Succeeded'
+        - poll_result.clusters.properties is defined
+        - poll_result.clusters.properties.provisioningState != 'Succeeded'
 
     #  6. Retrieve cluster credentials and endpoints 
     - name: "[KUBECONFIG] Retrieve admin credentials from Azure"
