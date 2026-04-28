@@ -83,10 +83,12 @@
           Missing or invalid required variable. Ensure cluster_name,
           resource_group, vnet_name are set and mi_prefix is 'wdr' or 'hdr'.
 
+    
 
     - name: Set pull secret content
       ansible.builtin.set_fact:
         pull_secret_content: "{{ pull_secret_content }}"
+
 
     - name: "[PREFLIGHT] Ensure pull secret is provided"
       ansible.builtin.assert:
@@ -121,6 +123,7 @@
         name:
           - azure-mgmt-redhatopenshift
           - azure-identity
+
     - name: Check azure.azcollection version
       ansible.builtin.command: ansible-galaxy collection list azure.azcollection
       register: az_version
@@ -306,6 +309,7 @@
           Skipping creation step.
       when: cluster_exists | bool
 
+
     - name: DEBUG - Check pull secret before normalization
       debug:
         msg:
@@ -343,6 +347,7 @@
             type: UserAssigned
             userAssignedIdentities: "{{ { (mi_platform_id): {} } }}"
               
+
           properties:
             clusterProfile:
               domain: "{{ cluster_domain }}"
@@ -350,6 +355,7 @@
               pullSecret: "{{ pull_secret_dict | to_json | string }}"
               resourceGroupId: "/subscriptions/{{ subscription_id }}/resourceGroups/{{ aro_infra_rg }}"
               fipsValidatedModules: "{{ fips_validated }}"
+
 
             networkProfile:
               podCidr: "{{ pod_cidr }}"
@@ -430,13 +436,13 @@
       ansible.builtin.fail:
         msg: >-
           Cluster {{ cluster_name }} ended in state
-          {{ poll_result.clusters.properties.provisioningState }}.
+          {{ poll_result.clusters[0].provisioning_state }}.
           Check Azure Portal.
       when:
-        # - not (cluster_exists | bool)
+        - not (cluster_exists | bool)
         - poll_result.clusters is defined
-        - poll_result.clusters.properties is defined
-        - poll_result.clusters.properties.provisioningState != 'Succeeded'
+        - poll_result.clusters | length > 0
+        - poll_result.clusters[0].provisioning_state != 'Succeeded'
 
     #  6. Retrieve cluster credentials and endpoints 
     - name: "[KUBECONFIG] Retrieve admin credentials from Azure"
@@ -472,8 +478,6 @@
         cluster_version: "{{ final_info.clusters.properties.clusterProfile.version }}"
         cluster_state:   "{{ final_info.clusters.properties.provisioningState }}"
 
-    
-
     #  9. Final deployment summary 
     - name: "[SUMMARY] Deployment complete"
       ansible.builtin.debug:
@@ -488,10 +492,8 @@
           - "  Version        : {{ cluster_version }}"
           - "  State          : {{ cluster_state }}"
           - "  API Server URL : {{ api_server_url }}"
-          # - "  Ready Nodes    : {{ ready_nodes }}"
           - "  Kubeconfig     : {{ kubeconfig_dest }}/{{ cluster_name }}.kubeconfig"
           - ""
           - "  Next Steps:"
           - "    Workload DR → import cluster into RHACM Hub DC (Step 2.6)"
           - "    Hub DR      → bootstrap ArgoCD GitOps (Step 4.1)"
-
