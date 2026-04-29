@@ -48,7 +48,7 @@
     pull_secret_content: "{{ pull_secret_content }}"
     kubeconfig_dest:    "{{ kubeconfig_dest_input    | default('/tmp') }}"
     fips_validated:     "{{ 'Enabled' if (fips_validated_input | default(false, true) | bool) else 'Disabled' }}"
-    aro_infra_rg: "{{ aro_infra_rg_input | default(resource_group ~ '-infra') }}"
+    aro_infra_rg: "{{ aro_infra_rg_input | default('sdd-workload-dr-aro-infra-rg') }}"
     encryption_at_host: "{{ encryption_at_host_input | default('Disabled') }}"
 
     #  Derived / computed 
