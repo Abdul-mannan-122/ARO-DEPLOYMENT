@@ -57,7 +57,7 @@
     # Managed identity naming convention: <prefix>-<role>
     # 9 identities are required per cluster (see Step 1.4)
     mi_names:
-      cluster:                "wdr-aro-cluster"
+      # cluster:                "wdr-aro-cluster"
       cloud_controller:       "id-aro-{{ mi_prefix }}-cloud-ctrl-mgr-01"
       disk_csi:               "id-aro-{{ mi_prefix }}-disk-csi-driver-01"
       file_csi:               "id-aro-{{ mi_prefix }}-file-csi-driver-01"
@@ -141,14 +141,14 @@
         var: sdk_version.stdout
 
     #  1. Retrieve managed identity resource IDs 
-    - name: "MI Get cluster managed identity - {{ mi_names.cluster }}"
-      azure.azcollection.azure_rm_resource_info:
-        resource_group:       "{{ resource_group }}"
-        provider:             ManagedIdentity
-        resource_type:        userAssignedIdentities
-        resource_name:        "{{ mi_names.cluster }}"
-        api_version:          "2023-01-31"
-      register: mi_cluster_info
+    # - name: "MI Get cluster managed identity - {{ mi_names.cluster }}"
+    #   azure.azcollection.azure_rm_resource_info:
+    #     resource_group:       "{{ resource_group }}"
+    #     provider:             ManagedIdentity
+    #     resource_type:        userAssignedIdentities
+    #     resource_name:        "{{ mi_names.cluster }}"
+    #     api_version:          "2023-01-31"
+    #   register: mi_cluster_info
 
     - name: "[MI] Get platform managed identity - {{ mi_names.platform }}"
       azure.azcollection.azure_rm_resource_info:
@@ -233,8 +233,8 @@
 
     - name: "[MI] Consolidate all identity resource IDs into facts"
       ansible.builtin.set_fact:
-        mi_cluster_id:        "{{ mi_cluster_info.response[0].id }}"
-        mi_cluster_client_id: "{{ mi_cluster_info.response[0].properties.clientId }}"
+        # mi_cluster_id:        "{{ mi_cluster_info.response[0].id }}"
+        # mi_cluster_client_id: "{{ mi_cluster_info.response[0].properties.clientId }}"
         mi_platform_id:       "{{ mi_platform_info.response[0].id }}"
         mi_ccm_id:            "{{ mi_ccm_info.response[0].id }}"
         mi_disk_csi_id:       "{{ mi_disk_csi_info.response[0].id }}"
@@ -249,7 +249,7 @@
     - name: "[MI] Display identity facts"
       ansible.builtin.debug:
         msg:
-          - "Cluster MI      : {{ mi_cluster_id }}"
+          # - "Cluster MI      : {{ mi_cluster_id }}"
           - "Cluster ClientID: {{ mi_cluster_client_id }}"
           - "Platform MI     : {{ mi_platform_id }}"
           - "CCM MI          : {{ mi_ccm_id }}"
@@ -332,7 +332,7 @@
     
     - name: Extract subscription ID
       set_fact:
-        subscription_id: "{{ mi_cluster_id.split('/')[2] }}"
+        subscription_id: "{{ mi_platform_id.split('/')[2] }}"
 
     - name: Create ARO cluster via ARM (FIXED)
       azure.azcollection.azure_rm_resource:
