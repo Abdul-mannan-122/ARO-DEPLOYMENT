@@ -250,7 +250,7 @@
       ansible.builtin.debug:
         msg:
           # - "Cluster MI      : {{ mi_cluster_id }}"
-          - "Cluster ClientID: {{ mi_cluster_client_id }}"
+          # - "Cluster ClientID: {{ mi_cluster_client_id }}"
           - "Platform MI     : {{ mi_platform_id }}"
           - "CCM MI          : {{ mi_ccm_id }}"
           - "Disk CSI MI     : {{ mi_disk_csi_id }}"
