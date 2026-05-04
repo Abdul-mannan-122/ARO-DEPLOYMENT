@@ -77,11 +77,11 @@
           - cluster_name  | length > 0
           - resource_group | length > 0
           - vnet_name     | length > 0
-          - mi_prefix in ['wdr', 'hdr']
+          - mi_prefix in ['workload', 'mgmt']
           - worker_count  | int >= 3
         fail_msg: >-
           Missing or invalid required variable. Ensure cluster_name,
-          resource_group, vnet_name are set and mi_prefix is 'wdr' or 'hdr'.
+          resource_group, vnet_name are set and mi_prefix is 'workload' or 'mgmt'.
 
     
 
