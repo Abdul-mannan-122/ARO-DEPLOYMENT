@@ -58,15 +58,15 @@
     # 9 identities are required per cluster (see Step 1.4)
     mi_names:
       # cluster:                "{{ mi_prefix }}-aro-cluster"
-      cloud_controller:       "id-aro-{{ mi_prefix }}-cloud-ctrl-mgr-01"
-      disk_csi:               "id-aro-{{ mi_prefix }}-disk-csi-driver-01"
-      file_csi:               "id-aro-{{ mi_prefix }}-file-csi-driver-01"
-      image_registry:         "id-aro-{{ mi_prefix }}-image-registry-01"
-      ingress:                "id-aro-{{ mi_prefix }}-ingress-01"
-      machine_api:            "id-aro-{{ mi_prefix }}-machine-api-01"
-      service_operator:       "id-aro-{{ mi_prefix }}-service-operator-01"
-      platform:               "id-aro-{{ mi_prefix }}-platform-01"
-      network:                "id-aro-{{ mi_prefix }}-cloud-network-config-01"
+      cloud_controller:       "{{ mi_prefix }}-aro-cloud-controller-manager"
+      disk_csi:               "{{ mi_prefix }}-aro-disk-csi-driver"
+      file_csi:               "{{ mi_prefix }}-aro-file-csi-driver"
+      image_registry:         "{{ mi_prefix }}-aro-image-registry"
+      ingress:                "{{ mi_prefix }}-aro-ingress"
+      machine_api:            "{{ mi_prefix }}-aro-machine-api"
+      service_operator:       "{{ mi_prefix }}-aro-service-operator"
+      platform:               "{{ mi_prefix }}-aro-platform"
+      network:                "{{ mi_prefix }}-aro-cloud-network-config"
 
   #  Pre-flight input validation 
   pre_tasks:
@@ -77,11 +77,11 @@
           - cluster_name  | length > 0
           - resource_group | length > 0
           - vnet_name     | length > 0
-          - mi_prefix in ['workload', 'mgmt']
+          - mi_prefix in ['wdr', 'hdr']
           - worker_count  | int >= 3
         fail_msg: >-
           Missing or invalid required variable. Ensure cluster_name,
-          resource_group, vnet_name are set and mi_prefix is 'workload' or 'mgmt'.
+          resource_group, vnet_name are set and mi_prefix is 'wdr' or 'hdr'.
 
     
 
