@@ -17,7 +17,7 @@
 #   pip install azure-mgmt-redhatopenshift azure-identity msrestazure
 #       azure-mgmt-compute azure-mgmt-network azure-mgmt-resource
 #
-# AAP Credential type : Microsoft Azure Resource Manager
+# AAP Credential type : Microsoft Azure Resource Manager..
 
 
 - name: Deploy Azure Red Hat OpenShift Cluster - SDD
