@@ -22,7 +22,7 @@
 
   vars:
     location: "uaenorth"
-    ansible_python_interpreter: "/root/ansible-azure/ansible-env/bin/python"
+    ansible_python_interpreter: "/opt/ansible-venv/ansible-env/bin/python"
 
     # Temporary test resource names
     test_rg: "rg-aap-spn-validation"
