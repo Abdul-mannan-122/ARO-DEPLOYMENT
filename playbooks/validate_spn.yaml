@@ -34,6 +34,13 @@
       ansible.builtin.debug:
         msg:
           - "Ansible Python Interpreter: {{ ansible_python_interpreter }}"
+    - name: Check filesystem
+      command: ls -l /opt
+      register: opt_check
+      changed_when: false
+     
+    - debug:
+        var: opt_check.stdout_lines
 
     - name: "[DEBUG] Verify interpreter exists"
       ansible.builtin.stat:
