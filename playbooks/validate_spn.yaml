@@ -1,0 +1,119 @@
+--- 
+# Playbook: validate_aap_spn_auth.yml
+# Purpose : Validate that the configured Azure SPN credentials
+#           in AAP are authenticated and have the required access.
+#
+# Validation:
+#   1. Login/authentication test
+#   2. Create temporary Resource Group
+#   3. Create test Storage Account
+#   4. Delete test resources
+#
+# AAP Credential Type:
+#   Microsoft Azure Resource Manager
+#
+# Usage:
+#   ansible-playbook validate_aap_spn_auth.yml
+
+- name: Validate AAP Azure SPN Authentication and Access
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    location: "uaenorth"
+    ansible_python_interpreter: "/root/ansible-azure/ansible-env/bin/python"
+
+    # Temporary test resource names
+    test_rg: "rg-aap-spn-validation"
+    test_storage: "stspnvalid{{ 99999 | random }}"
+
+  tasks:
+
+    - name: "[DEBUG] Display Python interpreter"
+      ansible.builtin.debug:
+        msg:
+          - "Ansible Python Interpreter: {{ ansible_python_interpreter }}"
+
+    - name: "[DEBUG] Verify interpreter exists"
+      ansible.builtin.stat:
+        path: "{{ ansible_python_interpreter }}"
+      register: python_check
+
+    - name: "[DEBUG] Fail if interpreter is missing"
+      ansible.builtin.fail:
+        msg: "Python interpreter does not exist"
+      when: not python_check.stat.exists
+
+    - name: "[DEBUG] Check Python version from virtual environment"
+      ansible.builtin.command:
+        cmd: "{{ ansible_python_interpreter }} --version"
+      register: python_version
+      changed_when: false
+
+    - name: "[DEBUG] Display Python version"
+      ansible.builtin.debug:
+        var: python_version.stdout
+
+    - name: "[AUTH] Verify Azure authentication context"
+      azure.azcollection.azure_rm_resourcegroup_info:
+      register: auth_test
+
+    - name: "[AUTH] Authentication successful"
+      ansible.builtin.debug:
+        msg:
+          - "Azure authentication successful"
+          - "SPN credentials from AAP are working correctly"
+
+    - name: "[RG] Create temporary validation resource group"
+      azure.azcollection.azure_rm_resourcegroup:
+        name: "{{ test_rg }}"
+        location: "{{ location }}"
+        state: present
+      register: rg_create
+
+    - name: "[RG] Display created resource group"
+      ansible.builtin.debug:
+        msg:
+          - "Resource Group created successfully"
+          - "RG Name: {{ test_rg }}"
+
+    - name: "[STORAGE] Create temporary storage account"
+      azure.azcollection.azure_rm_storageaccount:
+        resource_group: "{{ test_rg }}"
+        name: "{{ test_storage }}"
+        account_type: Standard_LRS
+        kind: StorageV2
+        location: "{{ location }}"
+        state: present
+      register: storage_create
+
+    - name: "[STORAGE] Display storage account details"
+      ansible.builtin.debug:
+        msg:
+          - "Storage account created successfully"
+          - "Storage Account: {{ test_storage }}"
+
+    - name: "[CLEANUP] Delete temporary storage account"
+      azure.azcollection.azure_rm_storageaccount:
+        resource_group: "{{ test_rg }}"
+        name: "{{ test_storage }}"
+        state: absent
+
+    - name: "[CLEANUP] Delete temporary resource group"
+      azure.azcollection.azure_rm_resourcegroup:
+        name: "{{ test_rg }}"
+        state: absent
+        force_delete_nonempty: true
+
+    - name: "[SUMMARY] Validation completed"
+      ansible.builtin.debug:
+        msg:
+          - "=================================================="
+          - "AAP SPN Validation Successful"
+          - "=================================================="
+          - "Authentication : SUCCESS"
+          - "Authorization  : SUCCESS"
+          - "Resource Create: SUCCESS"
+          - "Resource Delete: SUCCESS"
+          - "Configured AAP SPN has valid Azure access"
