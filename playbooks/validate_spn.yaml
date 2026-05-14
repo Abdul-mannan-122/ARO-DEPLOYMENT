@@ -1,14 +1,86 @@
----
-- name: Test Azure Collection
+--- 
+# Playbook: validate_aap_spn_auth.yml
+
+- name: Validate AAP Azure SPN Authentication and Access
   hosts: localhost
+  connection: local
   gather_facts: false
+
+  vars:
+    location: "uaenorth"
+
+    # Temporary test resource names
+    test_rg: "rg-aap-spn-validation"
+    test_storage: "stspnvalid{{ 99999 | random }}"
+
+  pre_tasks:
+
+    - name: "[PRECHECK] Display Python version"
+      ansible.builtin.command: python3 --version
+      register: python_version
+      changed_when: false
+
+    - name: "[PRECHECK] Show Python version"
+      ansible.builtin.debug:
+        var: python_version.stdout
+
+    - name: "[DEPENDENCY] Install required Azure Python SDK packages"
+      ansible.builtin.pip:
+        name:
+          - azure-identity
+          - azure-mgmt-resource
+          - azure-mgmt-storage
+          - azure-cli-core
+          - msrestazure
+          - packaging
+          - requests
+        executable: pip3
+      register: pip_install
+
+    - name: "[DEPENDENCY] Display pip installation result"
+      ansible.builtin.debug:
+        var: pip_install
+
+    - name: "[DEPENDENCY] Ensure Azure collection is installed"
+      ansible.builtin.command:
+        cmd: ansible-galaxy collection install azure.azcollection
+      changed_when: false
 
   tasks:
 
-    - name: Show installed collections
-      command: ansible-galaxy collection list
-      register: output
-      changed_when: false
+    - name: "[AUTH] Verify Azure authentication context"
+      azure.azcollection.azure_rm_resourcegroup_info:
+      register: auth_test
 
-    - debug:
-        var: output.stdout_lines
+    - name: "[AUTH] Authentication successful"
+      ansible.builtin.debug:
+        msg:
+          - "Azure authentication successful"
+          - "SPN credentials from AAP are working correctly"
+
+    - name: "[RG] Create temporary validation resource group"
+      azure.azcollection.azure_rm_resourcegroup:
+        name: "{{ test_rg }}"
+        location: "{{ location }}"
+        state: present
+
+    - name: "[STORAGE] Create temporary storage account"
+      azure.azcollection.azure_rm_storageaccount:
+        resource_group: "{{ test_rg }}"
+        name: "{{ test_storage }}"
+        account_type: Standard_LRS
+        kind: StorageV2
+        location: "{{ location }}"
+        state: present
+
+    - name: "[CLEANUP] Delete temporary storage account"
+      azure.azcollection.azure_rm_storageaccount:
+        resource_group: "{{ test_rg }}"
+        name: "{{ test_storage }}"
+        state: absent
+
+    - name: "[CLEANUP] Delete temporary resource group"
+      azure.azcollection.azure_rm_resourcegroup:
+        name: "{{ test_rg }}"
+        state: absent
+        force_delete_nonempty: true
