@@ -1,19 +1,5 @@
---- 
+---
 # Playbook: validate_aap_spn_auth.yml
-# Purpose : Validate that the configured Azure SPN credentials
-#           in AAP are authenticated and have the required access.
-#
-# Validation:
-#   1. Login/authentication test
-#   2. Create temporary Resource Group
-#   3. Create test Storage Account
-#   4. Delete test resources
-#
-# AAP Credential Type:
-#   Microsoft Azure Resource Manager
-#
-# Usage:
-#   ansible-playbook validate_aap_spn_auth.yml
 
 - name: Validate AAP Azure SPN Authentication and Access
   hosts: localhost
@@ -22,45 +8,45 @@
 
   vars:
     location: "uaenorth"
-    ansible_python_interpreter: "/opt/ansible-venv/ansible-env/bin/python"
 
     # Temporary test resource names
     test_rg: "rg-aap-spn-validation"
     test_storage: "stspnvalid{{ 99999 | random }}"
 
-  tasks:
+  pre_tasks:
 
-    - name: "[DEBUG] Display Python interpreter"
-      ansible.builtin.debug:
-        msg:
-          - "Ansible Python Interpreter: {{ ansible_python_interpreter }}"
-    - name: Check filesystem
-      command: ls -l /opt
-      register: opt_check
-      changed_when: false
-     
-    - debug:
-        var: opt_check.stdout_lines
-
-    - name: "[DEBUG] Verify interpreter exists"
-      ansible.builtin.stat:
-        path: "{{ ansible_python_interpreter }}"
-      register: python_check
-
-    - name: "[DEBUG] Fail if interpreter is missing"
-      ansible.builtin.fail:
-        msg: "Python interpreter does not exist"
-      when: not python_check.stat.exists
-
-    - name: "[DEBUG] Check Python version from virtual environment"
-      ansible.builtin.command:
-        cmd: "{{ ansible_python_interpreter }} --version"
+    - name: "[PRECHECK] Display Python version"
+      ansible.builtin.command: python3 --version
       register: python_version
       changed_when: false
 
-    - name: "[DEBUG] Display Python version"
+    - name: "[PRECHECK] Show Python version"
       ansible.builtin.debug:
         var: python_version.stdout
+
+    - name: "[DEPENDENCY] Install required Azure Python SDK packages"
+      ansible.builtin.pip:
+        name:
+          - azure-identity
+          - azure-mgmt-resource
+          - azure-mgmt-storage
+          - azure-cli-core
+          - msrestazure
+          - packaging
+          - requests
+        executable: pip3
+      register: pip_install
+
+    - name: "[DEPENDENCY] Display pip installation result"
+      ansible.builtin.debug:
+        var: pip_install
+
+    - name: "[DEPENDENCY] Ensure Azure collection is installed"
+      ansible.builtin.command:
+        cmd: ansible-galaxy collection install azure.azcollection
+      changed_when: false
+
+  tasks:
 
     - name: "[AUTH] Verify Azure authentication context"
       azure.azcollection.azure_rm_resourcegroup_info:
@@ -77,13 +63,6 @@
         name: "{{ test_rg }}"
         location: "{{ location }}"
         state: present
-      register: rg_create
-
-    - name: "[RG] Display created resource group"
-      ansible.builtin.debug:
-        msg:
-          - "Resource Group created successfully"
-          - "RG Name: {{ test_rg }}"
 
     - name: "[STORAGE] Create temporary storage account"
       azure.azcollection.azure_rm_storageaccount:
@@ -93,13 +72,6 @@
         kind: StorageV2
         location: "{{ location }}"
         state: present
-      register: storage_create
-
-    - name: "[STORAGE] Display storage account details"
-      ansible.builtin.debug:
-        msg:
-          - "Storage account created successfully"
-          - "Storage Account: {{ test_storage }}"
 
     - name: "[CLEANUP] Delete temporary storage account"
       azure.azcollection.azure_rm_storageaccount:
@@ -112,15 +84,3 @@
         name: "{{ test_rg }}"
         state: absent
         force_delete_nonempty: true
-
-    - name: "[SUMMARY] Validation completed"
-      ansible.builtin.debug:
-        msg:
-          - "=================================================="
-          - "AAP SPN Validation Successful"
-          - "=================================================="
-          - "Authentication : SUCCESS"
-          - "Authorization  : SUCCESS"
-          - "Resource Create: SUCCESS"
-          - "Resource Delete: SUCCESS"
-          - "Configured AAP SPN has valid Azure access"
